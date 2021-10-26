@@ -167,7 +167,7 @@ contract VotableStakingRewards is
     stakingToken.approve(address(next), balance);
     next.addVotes(balance);
 
-    userDelegateIdx[msg.sender] = nextId;
+    userDelegateIdx[msg.sender] = nextIdx;
     emit DelegateIdxChanged(previousIdx, nextIdx);
   }
 
