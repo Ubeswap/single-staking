@@ -133,7 +133,10 @@ contract VotableStakingRewards is
     stakingToken.safeTransferFrom(msg.sender, address(this), amount);
 
     Voter v = delegates[userDelegateIdx[msg.sender]];
-    stakingToken.approve(address(v), amount);
+    require(
+      stakingToken.approve(address(v), amount),
+      "Approve to voter failed"
+    );
     v.addVotes(amount);
 
     emit Staked(msg.sender, amount);
@@ -156,15 +159,18 @@ contract VotableStakingRewards is
     emit Withdrawn(msg.sender, amount);
   }
 
-  function changeDelegateIdx(uint8 nextIdx) public {
-    require(0 <= nextIdx && nextIdx < 3, "newDelegateIdx out of bounds.");
+  function changeDelegateIdx(uint8 nextIdx) external nonReentrant {
+    require(nextIdx < 3, "newDelegateIdx out of bounds.");
     uint8 previousIdx = userDelegateIdx[msg.sender];
     Voter previous = delegates[previousIdx];
     uint256 balance = _balances[msg.sender];
     previous.removeVotes(balance);
 
     Voter next = delegates[nextIdx];
-    stakingToken.approve(address(next), balance);
+    require(
+      stakingToken.approve(address(next), balance),
+      "Approve to voter failed"
+    );
     next.addVotes(balance);
 
     userDelegateIdx[msg.sender] = nextIdx;
