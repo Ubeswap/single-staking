@@ -1572,12 +1572,12 @@
     "@nodelib/fs.scandir" "2.1.5"
     fastq "^1.6.0"
 
-"@nomiclabs/hardhat-ethers@^2.0.2":
+"@nomiclabs/hardhat-ethers@^2.0.0":
   version "2.0.2"
   resolved "https://registry.yarnpkg.com/@nomiclabs/hardhat-ethers/-/hardhat-ethers-2.0.2.tgz#c472abcba0c5185aaa4ad4070146e95213c68511"
   integrity sha512-6quxWe8wwS4X5v3Au8q1jOvXYEPkS1Fh+cME5u6AwNdnI4uERvPlVjlgRWzpnb+Rrt1l/cEqiNRH9GlsBMSDQg==
 
-"@nomiclabs/hardhat-truffle5@^2.0.2":
+"@nomiclabs/hardhat-truffle5@^2.0.0":
   version "2.0.2"
   resolved "https://registry.yarnpkg.com/@nomiclabs/hardhat-truffle5/-/hardhat-truffle5-2.0.2.tgz#bfc29843a5a78a6eceafc3f5c24b6163b92424a1"
   integrity sha512-QHxtwNPmAYSxiUFCLqfTy3lbIgMeh0Uqcv5g9ioQWExMrYpwqW0goXTH6JWx3gwYIsF2ALtI4/10CKj7zLDyWA==
@@ -1588,7 +1588,7 @@
     ethereumjs-util "^7.1.0"
     fs-extra "^7.0.1"
 
-"@nomiclabs/hardhat-waffle@^2.0.1":
+"@nomiclabs/hardhat-waffle@^2.0.0":
   version "2.0.1"
   resolved "https://registry.yarnpkg.com/@nomiclabs/hardhat-waffle/-/hardhat-waffle-2.0.1.tgz#5d43654fba780720c5033dea240fe14f70ef4bd2"
   integrity sha512-2YR2V5zTiztSH9n8BYWgtv3Q+EL0N5Ltm1PAr5z20uAY4SkkfylJ98CIqt18XFvxTD5x4K2wKBzddjV9ViDAZQ==
@@ -2337,7 +2337,7 @@
   resolved "https://registry.yarnpkg.com/@truffle/expect/-/expect-0.0.18.tgz#022353a212942437e1a57ac1191d692347367bb5"
   integrity sha512-ZcYladRCgwn3bbhK3jIORVHcUOBk/MXsUxjfzcw+uD+0H1Kodsvcw1AAIaqd5tlyFhdOb7YkOcH0kUES7F8d1A==
 
-"@truffle/hdwallet-provider@^1.5.1":
+"@truffle/hdwallet-provider@^1.0.17":
   version "1.5.1"
   resolved "https://registry.yarnpkg.com/@truffle/hdwallet-provider/-/hdwallet-provider-1.5.1.tgz#05522f70e713fe1a4966706bb13960133b920e96"
   integrity sha512-sVt78Idr6k2Loi40Igc3A8ncy4zvUWdWaYYNRGaBPq67usR34tkp+RH+23PqU+alk44P0JwG3fNNEg1Hqwa3Xw==
@@ -4909,7 +4909,7 @@ chai-as-promised@^7.1.1:
   dependencies:
     check-error "^1.0.2"
 
-chai@^4.2.0, chai@^4.3.4:
+chai@^4.2.0:
   version "4.3.4"
   resolved "https://registry.yarnpkg.com/chai/-/chai-4.3.4.tgz#b55e655b31e1eac7099be4c08c21964fce2e6c49"
   integrity sha512-yS5H68VYOCtN1cjfwumDSuzn/9c+yza4f3reKXlE5rUg7SFcCEy90gJvydNgOYtblyf4Zi6jIWRnXOgErta0KA==
@@ -6769,7 +6769,7 @@ ethereum-protocol@^1.0.1:
   resolved "https://registry.yarnpkg.com/ethereum-protocol/-/ethereum-protocol-1.0.1.tgz#b7d68142f4105e0ae7b5e178cf42f8d4dc4b93cf"
   integrity sha512-3KLX1mHuEsBW0dKG+c6EOJS1NBNqdCICvZW9sInmZTt5aY0oxmHVggYRE0lJu1tcnMD1K+AKHdLi6U43Awm1Vg==
 
-ethereum-waffle@^3.4.0:
+ethereum-waffle@^3.0.0:
   version "3.4.0"
   resolved "https://registry.yarnpkg.com/ethereum-waffle/-/ethereum-waffle-3.4.0.tgz#990b3c6c26db9c2dd943bf26750a496f60c04720"
   integrity sha512-ADBqZCkoSA5Isk486ntKJVjFEawIiC+3HxNqpJqONvh3YXBTNiRfXvJtGuAFLXPG91QaqkGqILEHANAo7j/olQ==
@@ -8239,7 +8239,7 @@ har-validator@~5.1.3:
     ajv "^6.12.3"
     har-schema "^2.0.0"
 
-hardhat@^2.6.7:
+hardhat@^2.6.2:
   version "2.6.7"
   resolved "https://registry.yarnpkg.com/hardhat/-/hardhat-2.6.7.tgz#f9949e58f019439f0c5299b24e7f91d6c6a5ff29"
   integrity sha512-Mua01f6ZN1feQLktHSH2p5A5LCdA+Wf7+O2lJDH6wClvWPtI2eqKNNY2gxBwYXoQ28GZrT3K6mqQOZeRWAca6Q==
@@ -14547,7 +14547,7 @@ trim-right@^1.0.1:
   resolved "https://registry.yarnpkg.com/true-case-path/-/true-case-path-2.2.1.tgz#c5bf04a5bbec3fd118be4084461b3a27c4d796bf"
   integrity sha512-0z3j8R7MCjy10kc/g+qg7Ln3alJTodw9aDuVWZa3uiWqfuBMKeAeP2ocWcxoyM3D73yz3Jt/Pu4qPr4wHSdB/Q==
 
-truffle@^5.4.16:
+truffle@^5.1.29:
   version "5.4.16"
   resolved "https://registry.yarnpkg.com/truffle/-/truffle-5.4.16.tgz#9e568f82785786a6d89eecf2775accb5afcfdd9b"
   integrity sha512-70J8hpKlD8tAgZgOAktWDVP42fehBKu47Ce7jGShTpx1zuRazazuWp1AZWjOO63tRcgC4a5HaRUu6xhVOOjNhw==
