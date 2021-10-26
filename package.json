@@ -1,0 +1,14 @@
+{
+  "name": "single-staking",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "https://github.com/Ubeswap/single-staking",
+  "author": "Ubeswap",
+  "license": "MIT",
+  "dependencies": {
+    "@openzeppelin/contracts": "^4.3.2",
+    "@truffle/hdwallet-provider": "^1.5.1",
+    "dotenv": "^10.0.0",
+    "truffle": "^5.4.16"
+  }
+}
