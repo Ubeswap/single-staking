@@ -22,6 +22,7 @@
     "truffle": "^5.4.16"
   },
   "scripts": {
-    "slither": "slither --exclude-dependencies --exclude-informational --exclude-low --exclude=reentrancy-eth,reentrancy-no-eth,divide-before-multiply ."
+    "slither": "slither --exclude-dependencies --exclude-informational --exclude-low --exclude=reentrancy-eth,reentrancy-no-eth,divide-before-multiply .",
+    "test": "truffle test"
   }
 }
