@@ -2890,9 +2890,9 @@
   resolved "https://registry.yarnpkg.com/@types/zen-observable/-/zen-observable-0.8.3.tgz#781d360c282436494b32fe7d9f7f8e64b3118aa3"
   integrity sha512-fbF6oTd4sGGy0xjHPKAt+eS2CrxJ3+6gQ3FGcBoIJR2TLAyCkCyI8JqZNy+FeON0AhVgNJoUumVoZQjBFUqHkw==
 
-"@ubeswap/governance@https://github.com/Ubeswap/ubeswap-governance":
+"@ubeswap/governance@git+https://github.com/Ubeswap/ubeswap-governance.git#a9ed8e5aef4ced8562876ed254727c5033f6f2ae":
   version "1.0.0"
-  resolved "https://github.com/Ubeswap/ubeswap-governance#a9ed8e5aef4ced8562876ed254727c5033f6f2ae"
+  resolved "git+https://github.com/Ubeswap/ubeswap-governance.git#a9ed8e5aef4ced8562876ed254727c5033f6f2ae"
 
 "@wry/context@^0.6.0":
   version "0.6.1"
