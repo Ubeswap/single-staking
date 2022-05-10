@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: MIT
-//make all the interactions happen through VoteableStakingRewards, so the frontend doesnt have to worry about two contracts
-
 
 pragma solidity ^0.8.3;
 
@@ -13,12 +11,9 @@ import "./interfaces/IRomulusDelegate.sol";
 contract Voter is Ownable {
     using SafeERC20 for IERC20;
 
-    //uint8 public immutable support;
     IVotingDelegates public immutable votingToken;
     IRomulusDelegate public immutable romulusDelegate;
     address public controllerAddress;
-    bool public isExist = false;
-    uint256 public value;
 
     constructor(
         IVotingDelegates _votingToken,
@@ -27,8 +22,6 @@ contract Voter is Ownable {
         votingToken = _votingToken;
         romulusDelegate = _romulusDelegate;
         _votingToken.delegate(address(this));
-        isExist = true;
-        value = 1;
     }
 
     /// @notice
@@ -41,8 +34,6 @@ contract Voter is Ownable {
     }
 
 
-    //work on adding missing funcitons in romulus
-    //update cast vote so that user has to pass in support
     function removeVotes(uint256 amount) external onlyOwner{
         IERC20(address(votingToken)).safeTransfer(msg.sender, amount);
     }
@@ -69,11 +60,4 @@ contract Voter is Ownable {
             description
         );
     }
-
-    //make sure if somebody is calling VotableStakingRewards, only that user can use that voter
-    //onlyOwner can propose
-    //general idea: only user can propose using their voter
-    //in additon to owner we want controller
-    //make controllable contract
-    //controllable is a standalone contract, constructor takes a controller, sets the controller to be an immutable state variable, creates a modifier (a special function that enforces the msg.sender is equal to controller)
 }

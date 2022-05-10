@@ -1,16 +1,6 @@
 // SPDX-License-Identifier: MIT
 // solhint-disable not-rely-on-time
 
-//create a voter for every stake if user doesnt have voter
-//user should be allowed to cast and propose votes, castvotes and propose should have Controllable permissions
-//write more tests to test for two users
-//add ???natspect documentation, for each function, give an @notice, @dev for developers
-
-//clean comments, write in natspect to help other ppl out
-//update tests, add assertions to make sure people cant call other people's voters
-//add controllable thing to castvote and propose, ensure that other people cant call castvote or propose
-//stake deploys another voter if user doesnt already have one
-
 pragma solidity ^0.8.3;
 
 import "@openzeppelin/contracts/utils/math/Math.sol";

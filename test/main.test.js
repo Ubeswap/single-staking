@@ -45,20 +45,13 @@ contract("VotableStakingRewards", (accounts) => {
     it("should work", async () => {
 
       const balanceBefores = await token.balanceOf(sender);
-      console.log(`balance sender 1: ${balanceBefores}`);
-
       await token.approve(stakingRewards.address, amount);
-
       const balanceBefore = await token.balanceOf(sender);
       const balanceBeforeV1 = await token.balanceOf(v1);
-
-
       await stakingRewards.stake(amount);
-          
-      const balanceAfter = await token.balanceOf(sender);
-      console.log(`\nbalance after: ${balanceAfter}`);
-
+  
       voter0 = await Voter.at(await stakingRewards.voters(sender));
+      const balanceAfter = await token.balanceOf(sender);
 
       balanceBefore.sub(balanceAfter).should.be.eq.BN(amount);
       (await stakingRewards.balanceOf(sender)).should.be.eq.BN(amount);
@@ -75,7 +68,6 @@ contract("VotableStakingRewards", (accounts) => {
       (proposals).should.be.eq.BN(1); // Against
     });
   });
-
 
   describe("#Voter:castVote", () => {
     it("should work", async () => {
