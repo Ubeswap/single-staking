@@ -1,6 +1,16 @@
 // SPDX-License-Identifier: MIT
 // solhint-disable not-rely-on-time
 
+//create a voter for every stake if user doesnt have voter
+//user should be allowed to cast and propose votes, castvotes and propose should have Controllable permissions
+//write more tests to test for two users
+//add ???natspect documentation, for each function, give an @notice, @dev for developers
+
+//clean comments, write in natspect to help other ppl out
+//update tests, add assertions to make sure people cant call other people's voters
+//add controllable thing to castvote and propose, ensure that other people cant call castvote or propose
+//stake deploys another voter if user doesnt already have one
+
 pragma solidity ^0.8.3;
 
 import "@openzeppelin/contracts/utils/math/Math.sol";
@@ -31,22 +41,16 @@ contract VotableStakingRewards is
     uint256 public rewardsDuration = 7 days;
     uint256 public lastUpdateTime;
     uint256 public rewardPerTokenStored;
-
+    IRomulusDelegate public immutable romulusDelegate;
+    address public voterStaking;
     mapping(address => uint256) public userRewardPerTokenPaid;
     mapping(address => uint256) public rewards;
-
     uint256 private _totalSupply;
     mapping(address => uint256) private _balances;
 
     // Voters
-    // 0 - Abstain
-    // 1 - For
-    // 2 - Against
-    Voter[3] public delegates;
-    mapping(address => uint8) public userDelegateIdx;
-
     mapping(address => Voter) public voters;
-
+    uint256 public latestID = 0;
     /* ========== CONSTRUCTOR ========== */
 
     constructor(
@@ -59,39 +63,19 @@ contract VotableStakingRewards is
         rewardsToken = IERC20(_rewardsToken);
         stakingToken = IERC20(_stakingToken);
         rewardsDistribution = _rewardsDistribution;
+        voterStaking = _stakingToken;
+        romulusDelegate = _romulusDelegate;
+        owner = _owner;
 
-        // delegates[0] = new Voter(
-        //     2, // Abstain
-        //     IVotingDelegates(_stakingToken),
-        //     _romulusDelegate
-        // );
-        // delegates[1] = new Voter(
-        //     1, // For
-        //     IVotingDelegates(_stakingToken),
-        //     _romulusDelegate
-        // );
-        // delegates[2] = new Voter(
-        //     0, // Against
-        //     IVotingDelegates(_stakingToken),
-        //     _romulusDelegate
-        //);
-        voters[msg.sender] = new Voter(
-            IVotingDelegates(_stakingToken),
-            _romulusDelegate
-        );
     }
 
     /* ========== VIEWS ========== */
-
-    // function supportOf(address account) external view returns (uint8) {
-    //     //return delegates[userDelegateIdx[account]].support();
-    //     return voters[account].support();
-    // }
 
     function totalSupply() external view override returns (uint256) {
         return _totalSupply;
     }
 
+    /// @notice Returns the total balance of user's account
     function balanceOf(address account)
         external
         view
@@ -133,9 +117,9 @@ contract VotableStakingRewards is
 
     /* ========== MUTATIVE FUNCTIONS ========== */
 
+    /// @notice allows users to stake their ube to vote
     function stake(uint256 amount)
         external
-        override
         nonReentrant
         updateReward(msg.sender)
     {
@@ -144,18 +128,23 @@ contract VotableStakingRewards is
         _balances[msg.sender] = _balances[msg.sender].add(amount);
         stakingToken.safeTransferFrom(msg.sender, address(this), amount);
 
-        //Voter v = delegates[userDelegateIdx[msg.sender]];
+        if (address(voters[msg.sender]) == address(0)) {
+            voters[msg.sender] = new Voter(
+                IVotingDelegates(voterStaking),
+                romulusDelegate
+            );
+        } 
         Voter v = voters[msg.sender];
+
         require(
             stakingToken.approve(address(v), amount),
             "Approve to voter failed"
         );
         v.addVotes(amount);
-
         emit Staked(msg.sender, amount);
     }
 
-    //new parameter here -> support
+    /// @notice allows user to withdraw their ube
     function withdraw(uint256 amount)
         public
         override
@@ -166,38 +155,12 @@ contract VotableStakingRewards is
         _totalSupply = _totalSupply.sub(amount);
         _balances[msg.sender] = _balances[msg.sender].sub(amount);
 
-        //Voter v = delegates[userDelegateIdx[msg.sender]];
-
         Voter v = voters[msg.sender];
-
-        //will have to keep delegate pool, withdraw a variable amount of "support"
         v.removeVotes(amount);
 
         stakingToken.safeTransfer(msg.sender, amount);
         emit Withdrawn(msg.sender, amount);
     }
-
-    function changeDelegateIdx(uint8 nextIdx) external nonReentrant {
-        require(nextIdx < 3, "newDelegateIdx out of bounds.");
-
-        uint8 previousIdx = userDelegateIdx[msg.sender];
-        Voter previous = delegates[previousIdx];
-
-        uint256 balance = _balances[msg.sender];
-        previous.removeVotes(balance);
-
-        Voter next = delegates[nextIdx];
-        require(
-            stakingToken.approve(address(next), balance),
-            "Approve to voter failed"
-        );
-        next.addVotes(balance);
-
-        userDelegateIdx[msg.sender] = nextIdx;
-        emit DelegateIdxChanged(previousIdx, nextIdx);
-    }
-
-    //work up to here
 
     function getReward() public override nonReentrant updateReward(msg.sender) {
         uint256 reward = rewards[msg.sender];
@@ -208,7 +171,8 @@ contract VotableStakingRewards is
         }
     }
 
-    function exit() external override {
+    /// @notice withdraws all ube of user
+    function exit() external onlyOwner{
         withdraw(_balances[msg.sender]);
         getReward();
     }
@@ -264,6 +228,31 @@ contract VotableStakingRewards is
         );
         rewardsDuration = _rewardsDuration;
         emit RewardsDurationUpdated(rewardsDuration);
+    }
+
+    /* ========== VOTER FUNCTIONS ========== */
+    
+    function propose(
+        address[] memory targets,
+        uint256[] memory values,
+        string[] memory signatures,
+        bytes[] memory calldatas,
+        string memory description
+    ) external onlyOwner{
+        require(address(voters[msg.sender]) != address(0));
+        voters[msg.sender].propose(        
+            targets,
+            values,
+            signatures,
+            calldatas,
+            description
+        );
+
+    }
+
+    function castVote(uint256 proposalId, uint8 support) external onlyOwner {
+        require(address(voters[msg.sender]) != address(0));
+        voters[msg.sender].castVote(proposalId, support);
     }
 
     /* ========== MODIFIERS ========== */

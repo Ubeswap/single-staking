@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: MIT
+//make all the interactions happen through VoteableStakingRewards, so the frontend doesnt have to worry about two contracts
+
 
 pragma solidity ^0.8.3;
 
@@ -6,8 +8,9 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@ubeswap/governance/contracts/interfaces/IVotingDelegates.sol";
-
 import "./interfaces/IRomulusDelegate.sol";
+
+import "./Controllable.sol";
 
 contract Voter is Ownable {
     using SafeERC20 for IERC20;
@@ -15,20 +18,23 @@ contract Voter is Ownable {
     //uint8 public immutable support;
     IVotingDelegates public immutable votingToken;
     IRomulusDelegate public immutable romulusDelegate;
+    address public controllerAddress;
+    bool public isExist = false;
+    uint256 public value;
 
     constructor(
-        //uint8 _support,
         IVotingDelegates _votingToken,
         IRomulusDelegate _romulusDelegate
     ) {
-        //support = _support;
         votingToken = _votingToken;
         romulusDelegate = _romulusDelegate;
-
         _votingToken.delegate(address(this));
+        isExist = true;
+        value = 1;
     }
 
-    function addVotes(uint256 amount) external onlyOwner {
+    /// @notice
+    function addVotes(uint256 amount) external onlyOwner{
         IERC20(address(votingToken)).safeTransferFrom(
             msg.sender,
             address(this),
@@ -36,17 +42,17 @@ contract Voter is Ownable {
         );
     }
 
+
     //work on adding missing funcitons in romulus
     //update cast vote so that user has to pass in support
-    function removeVotes(uint256 amount) external onlyOwner {
+    function removeVotes(uint256 amount) external onlyOwner{
         IERC20(address(votingToken)).safeTransfer(msg.sender, amount);
     }
 
-    // function castVote(uint256 proposalId) external {
-    //     romulusDelegate.castVote(proposalId, support);
-    // }
-
-    function castVote(uint256 proposalId, uint8 support) external {
+    function castVote(uint256 proposalId, uint8 support)
+        external
+        onlyOwner
+    {
         romulusDelegate.castVote(proposalId, support);
     }
 
@@ -56,7 +62,7 @@ contract Voter is Ownable {
         string[] memory signatures,
         bytes[] memory calldatas,
         string memory description
-    ) external {
+    ) external onlyOwner{
         romulusDelegate.propose(
             targets,
             values,

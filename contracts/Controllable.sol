@@ -6,7 +6,7 @@ pragma solidity ^0.8.3;
 //sets the controller to be an immutable state variable,
 //creates a modifier (a special function that enforces the msg.sender is equal to controller)
 
-contract Controller {
+contract Controllable {
     address public immutable controller;
 
     constructor(address _controller) {
