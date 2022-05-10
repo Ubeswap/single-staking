@@ -10,8 +10,6 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@ubeswap/governance/contracts/interfaces/IVotingDelegates.sol";
 import "./interfaces/IRomulusDelegate.sol";
 
-import "./Controllable.sol";
-
 contract Voter is Ownable {
     using SafeERC20 for IERC20;
 
