@@ -31,10 +31,12 @@ contract VotableStakingRewards is
   uint256 public rewardsDuration = 7 days;
   uint256 public lastUpdateTime;
   uint256 public rewardPerTokenStored;
+
   IRomulusDelegate public immutable romulusDelegate;
   address public voterStaking;
   mapping(address => uint256) public userRewardPerTokenPaid;
   mapping(address => uint256) public rewards;
+
   uint256 private _totalSupply;
   mapping(address => uint256) private _balances;
   mapping(address => Voter) public voters;
@@ -48,7 +50,7 @@ contract VotableStakingRewards is
     address _rewardsToken,
     address _stakingToken,
     IRomulusDelegate _romulusDelegate
-    ) Owned(_owner) {
+  ) Owned(_owner) {
     rewardsToken = IERC20(_rewardsToken);
     stakingToken = IERC20(_stakingToken);
     rewardsDistribution = _rewardsDistribution;
@@ -63,8 +65,8 @@ contract VotableStakingRewards is
     return _totalSupply;
   }
 
-  /// @notice Returns the total balance of user's account
-  function balanceOf(address account) external view override returns (uint256){
+  /// @notice Returns the total amount a user has staked
+  function balanceOf(address account) external view override returns (uint256) {
     return _balances[account];
   }
 
@@ -83,7 +85,7 @@ contract VotableStakingRewards is
           .mul(rewardRate)
           .mul(1e18)
           .div(_totalSupply)
-    );
+      );
   }
 
   function earned(address account) public view override returns (uint256) {
@@ -123,11 +125,12 @@ contract VotableStakingRewards is
       stakingToken.approve(address(v), amount),
       "Approve to voter failed"
     );
-    v.addVotes(amount);
+    IERC20(address(IVotingDelegates(voterStaking))).safeTransferFrom( address(this), address(v), amount);
+    
     emit Staked(msg.sender, amount);
   }
 
-  /// @notice allows user to withdraw their ube
+  /// @notice withdraws staked tokens
   function withdraw(uint256 amount)
     public
     override
@@ -154,7 +157,7 @@ contract VotableStakingRewards is
     }
   }
 
-  /// @notice withdraws all ube of user
+  /// @notice withdraws all staked tokens and claims any pending rewards
   function exit() external onlyOwner{
     withdraw(_balances[msg.sender]);
     getReward();
@@ -180,15 +183,15 @@ contract VotableStakingRewards is
     // This keeps the reward rate in the right range, preventing overflows due to
     // very high values of rewardRate in the earned and rewardsPerToken functions;
     // Reward + leftover must be less than 2^256 / 10^18 to avoid overflow.
-      uint256 balance = rewardsToken.balanceOf(address(this));
-      require(
-        rewardRate <= balance.div(rewardsDuration),
-        "Provided reward too high"
-      );
+    uint256 balance = rewardsToken.balanceOf(address(this));
+    require(
+      rewardRate <= balance.div(rewardsDuration),
+      "Provided reward too high"
+    );
 
-      lastUpdateTime = block.timestamp;
-      periodFinish = block.timestamp.add(rewardsDuration);
-      emit RewardAdded(reward);
+    lastUpdateTime = block.timestamp;
+    periodFinish = block.timestamp.add(rewardsDuration);
+    emit RewardAdded(reward);
   }
 
   // Added to support recovering LP Rewards from other systems such as BAL to be distributed to holders
@@ -200,9 +203,9 @@ contract VotableStakingRewards is
       tokenAddress != address(stakingToken),
       "Cannot withdraw the staking token"
     );
-      IERC20(tokenAddress).safeTransfer(owner, tokenAmount);
-      emit Recovered(tokenAddress, tokenAmount);
-    }
+    IERC20(tokenAddress).safeTransfer(owner, tokenAmount);
+    emit Recovered(tokenAddress, tokenAmount);
+  }
 
   function setRewardsDuration(uint256 _rewardsDuration) external onlyOwner {
     require(
@@ -221,8 +224,13 @@ contract VotableStakingRewards is
     string[] memory signatures,
     bytes[] memory calldatas,
     string memory description
-    ) external onlyOwner{
+    ) external {
+
+//I don't think you need any checks here. voters[msg.sender] already enforces that only the caller's voter is calling propose.
     require(address(voters[msg.sender]) != address(0));
+
+//Wouldn't this only be callable by the VotableStakingRewards owner? 
+//Try testing propose from a wallet that isn't the VotableStakingRewards owner.
     voters[msg.sender].propose(        
       targets,
       values,
@@ -230,7 +238,6 @@ contract VotableStakingRewards is
       calldatas,
       description
     );
-
   }
 
   function castVote(uint256 proposalId, uint8 support) external onlyOwner {

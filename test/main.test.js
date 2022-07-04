@@ -1,17 +1,16 @@
 /* global artifacts, web3, contract */
+
 require("chai")
   .use(require("bn-chai")(web3.utils.BN))
   .use(require("chai-as-promised"))
   .should();
 
-const ethers = require('ethers');
-const { messagePrefix } = require("ethers/node_modules/@ethersproject/hash");
-
+//const ethers = require('ethers');
+//const { ethers } = require("hardhat");
 const VotableStakingRewards = artifacts.require("VotableStakingRewards");
 const MockRomulus = artifacts.require("MockRomulus");
 const MockVotingToken = artifacts.require("MockVotingToken");
 const Voter = artifacts.require("Voter");
-let targets, values, signatures, calldatas, a1;
 
 function encodeParameters(types, values) {
   const abi = new ethers.utils.AbiCoder();
@@ -19,15 +18,14 @@ function encodeParameters(types, values) {
 }
 
 contract("VotableStakingRewards", (accounts) => {
-  const sender = accounts[0];
   const amount = 1000;
-  let token, stakingRewards, voter1, voter2, voter3, voter4;
+  let token, stakingRewards;
 
   before(async () => {
-    [root, a1, proposer, v1, v2, v3, v4, a2] = accounts;
+    [sender, a1, proposer, v1, v2, v3, v4, a2] = accounts;
     values = ["0"];
     signatures = ["getBalanceOf(address)"];
-    calldatas = [encodeParameters(['address'], [a1])];
+    //calldatas = [encodeParameters(['address'], [a1])];
 
     token = await MockVotingToken.new();
     romulus = await MockRomulus.new(token.address);
@@ -39,16 +37,22 @@ contract("VotableStakingRewards", (accounts) => {
       token.address,
       romulus.address
     );
+
+    //Token = await ethers.getContractFactory("Token");
+
   });
 
   describe("#constructor/stake", () => {
     it("should work", async () => {
+
+      //await stakingRewards.connect(v1).transfer(40);
 
       const balanceBefores = await token.balanceOf(sender);
       await token.approve(stakingRewards.address, amount);
       const balanceBefore = await token.balanceOf(sender);
       const balanceBeforeV1 = await token.balanceOf(v1);
       await stakingRewards.stake(amount);
+
   
       voter0 = await Voter.at(await stakingRewards.voters(sender));
       const balanceAfter = await token.balanceOf(sender);
@@ -58,6 +62,9 @@ contract("VotableStakingRewards", (accounts) => {
       (await token.balanceOf(stakingRewards.address)).should.be.eq.BN(0);
       (await token.balanceOf(voter0.address)).should.be.eq.BN(amount); // Voter should have all the tokens
       (await token.getCurrentVotes(voter0.address)).should.be.eq.BN(amount);
+
+      console.log(v1);
+      //await v1.stake(amount);
     });
   });
 

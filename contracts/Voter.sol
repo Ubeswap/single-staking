@@ -12,9 +12,9 @@ import "./interfaces/IRomulusDelegate.sol";
 contract Voter is Ownable {
   using SafeERC20 for IERC20;
 
+  address public controllerAddress;
   IVotingDelegates public immutable votingToken;
   IRomulusDelegate public immutable romulusDelegate;
-  address public controllerAddress;
 
   constructor(
     IVotingDelegates _votingToken,
@@ -22,6 +22,7 @@ contract Voter is Ownable {
   ) {
     votingToken = _votingToken;
     romulusDelegate = _romulusDelegate;
+
     _votingToken.delegate(address(this));
   }
 
@@ -34,7 +35,7 @@ contract Voter is Ownable {
     );
   }
 
-  function removeVotes(uint256 amount) external onlyOwner{
+  function removeVotes(uint256 amount) external onlyOwner {
     IERC20(address(votingToken)).safeTransfer(msg.sender, amount);
   }
 
