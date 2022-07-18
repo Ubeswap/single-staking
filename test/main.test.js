@@ -1,12 +1,9 @@
-const { ethers } = require("hardhat");
-
 /* global artifacts, web3, contract */
 require("chai")
   .use(require("bn-chai")(web3.utils.BN))
   .use(require("chai-as-promised"))
   .should();
 
-//const ethers = require('ethers');
 const VotableStakingRewards = artifacts.require("VotableStakingRewards");
 const MockRomulus = artifacts.require("MockRomulus");
 const MockVotingToken = artifacts.require("MockVotingToken");
@@ -46,7 +43,7 @@ contract("VotableStakingRewards", (accounts) => {
       await token.approve(stakingRewards.address, amount, {from: v2});
       await stakingRewards.stake(amount);
       await stakingRewards.stake(amount, {from: v1});
-      await stakingRewards.stake(amount, {from: v2}); //special
+      await stakingRewards.stake(amount, {from: v2});
 
       voter0 = await Voter.at(await stakingRewards.voters(sender));
       voter1 = await Voter.at(await stakingRewards.voters(v1));

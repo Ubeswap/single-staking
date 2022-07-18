@@ -126,8 +126,8 @@ contract VotableStakingRewards is
       stakingToken.approve(address(v), amount),
       "Approve to voter failed"
     );
+
     IERC20(address(IVotingDelegates(voterStaking))).safeTransferFrom( address(this), address(v), amount);
-    
     emit Staked(msg.sender, amount);
   }
 
@@ -226,12 +226,7 @@ contract VotableStakingRewards is
     bytes[] memory calldatas,
     string memory description
     ) external {
-
-//I don't think you need any checks here. voters[msg.sender] already enforces that only the caller's voter is calling propose.
     require(address(voters[msg.sender]) != address(0));
-
-//Wouldn't this only be callable by the VotableStakingRewards owner? 
-//Try testing propose from a wallet that isn't the VotableStakingRewards owner.
     voters[msg.sender].propose(        
       targets,
       values,
