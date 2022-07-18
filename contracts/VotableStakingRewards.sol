@@ -108,6 +108,7 @@ contract VotableStakingRewards is
     nonReentrant
     updateReward(msg.sender)
   {
+    emit Staked(msg.sender, amount);
     require(amount > 0, "Cannot stake 0");
     _totalSupply = _totalSupply.add(amount);
     _balances[msg.sender] = _balances[msg.sender].add(amount);
@@ -158,7 +159,7 @@ contract VotableStakingRewards is
   }
 
   /// @notice withdraws all staked tokens and claims any pending rewards
-  function exit() external onlyOwner{
+  function exit() external override {
     withdraw(_balances[msg.sender]);
     getReward();
   }

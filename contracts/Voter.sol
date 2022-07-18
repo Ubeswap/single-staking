@@ -26,7 +26,6 @@ contract Voter is Ownable {
     _votingToken.delegate(address(this));
   }
 
-  /// @notice
   function addVotes(uint256 amount) external onlyOwner{
     IERC20(address(votingToken)).safeTransferFrom(
       msg.sender,
