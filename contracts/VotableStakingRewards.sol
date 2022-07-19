@@ -123,7 +123,7 @@ contract VotableStakingRewards is
       "Approve to voter failed"
     );
 
-    IERC20(address(stakingToken)).safeTransferFrom( address(this), address(v), amount); //directly from user to voter
+    IERC20(address(stakingToken)).safeTransferFrom( address(this), address(v), amount);
     emit Staked(msg.sender, amount);
   }
 
@@ -138,9 +138,9 @@ contract VotableStakingRewards is
     require(amount > 0, "Cannot withdraw 0");
     _totalSupply = _totalSupply.sub(amount);
     _balances[msg.sender] = _balances[msg.sender].sub(amount);
-    
     Voter v = voters[msg.sender];
     v.removeVotes(amount);
+    
     stakingToken.safeTransfer(msg.sender, amount);
     emit Withdrawn(msg.sender, amount);
   }
