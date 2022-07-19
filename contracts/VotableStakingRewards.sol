@@ -140,7 +140,7 @@ contract VotableStakingRewards is
     _balances[msg.sender] = _balances[msg.sender].sub(amount);
     Voter v = voters[msg.sender];
     v.removeVotes(amount);
-    
+
     stakingToken.safeTransfer(msg.sender, amount);
     emit Withdrawn(msg.sender, amount);
   }
