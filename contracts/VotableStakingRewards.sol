@@ -235,6 +235,10 @@ contract VotableStakingRewards is
     voters[msg.sender].castVote(proposalId, support);
   }
 
+  function delegate(address delegatee) external onlyOwner checkUser(msg.sender) {
+    voters[msg.sender].delegate(delegatee);
+  }
+
   /* ========== MODIFIERS ========== */
 
   modifier updateReward(address account) {
@@ -251,7 +255,7 @@ contract VotableStakingRewards is
     require(address(voters[user]) != address(0));
     _;
   }
-  
+
   /* ========== EVENTS ========== */
 
   event RewardAdded(uint256 reward);
