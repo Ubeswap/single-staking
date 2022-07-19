@@ -12,7 +12,6 @@ import "./interfaces/IRomulusDelegate.sol";
 contract Voter is Ownable {
   using SafeERC20 for IERC20;
 
-  address public controllerAddress;
   IVotingDelegates public immutable votingToken;
   IRomulusDelegate public immutable romulusDelegate;
 
@@ -56,5 +55,9 @@ contract Voter is Ownable {
       calldatas,
       description
     );
+  }
+
+  function delegate(address delegatee) external onlyOwner {
+    votingToken.delegate(delegatee);
   }
 }

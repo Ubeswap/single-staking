@@ -33,7 +33,6 @@ contract VotableStakingRewards is
   uint256 public rewardPerTokenStored;
 
   IRomulusDelegate public immutable romulusDelegate;
-  address public voterStaking;
   mapping(address => uint256) public userRewardPerTokenPaid;
   mapping(address => uint256) public rewards;
 
@@ -54,9 +53,7 @@ contract VotableStakingRewards is
     rewardsToken = IERC20(_rewardsToken);
     stakingToken = IERC20(_stakingToken);
     rewardsDistribution = _rewardsDistribution;
-    voterStaking = _stakingToken;
     romulusDelegate = _romulusDelegate;
-    owner = _owner;
   }
 
   /* ========== VIEWS ========== */
@@ -102,13 +99,12 @@ contract VotableStakingRewards is
 
   /* ========== MUTATIVE FUNCTIONS ========== */
 
-  /// @notice allows users to stake their ube to vote
+  /// @notice stakes user tokens into contract
   function stake(uint256 amount)
     external
     nonReentrant
     updateReward(msg.sender)
   {
-    emit Staked(msg.sender, amount);
     require(amount > 0, "Cannot stake 0");
     _totalSupply = _totalSupply.add(amount);
     _balances[msg.sender] = _balances[msg.sender].add(amount);
@@ -116,7 +112,7 @@ contract VotableStakingRewards is
 
     if (address(voters[msg.sender]) == address(0)) {
       voters[msg.sender] = new Voter(
-        IVotingDelegates(voterStaking),
+        IVotingDelegates(address(stakingToken)),
         romulusDelegate
       );
     } 
@@ -127,7 +123,7 @@ contract VotableStakingRewards is
       "Approve to voter failed"
     );
 
-    IERC20(address(IVotingDelegates(voterStaking))).safeTransferFrom( address(this), address(v), amount);
+    IERC20(address(stakingToken)).safeTransferFrom( address(this), address(v), amount); //directly from user to voter
     emit Staked(msg.sender, amount);
   }
 
@@ -137,14 +133,14 @@ contract VotableStakingRewards is
     override
     nonReentrant
     updateReward(msg.sender)
+    checkUser(msg.sender)
   {
     require(amount > 0, "Cannot withdraw 0");
     _totalSupply = _totalSupply.sub(amount);
     _balances[msg.sender] = _balances[msg.sender].sub(amount);
-
+    
     Voter v = voters[msg.sender];
     v.removeVotes(amount);
-
     stakingToken.safeTransfer(msg.sender, amount);
     emit Withdrawn(msg.sender, amount);
   }
@@ -225,8 +221,7 @@ contract VotableStakingRewards is
     string[] memory signatures,
     bytes[] memory calldatas,
     string memory description
-    ) external {
-    require(address(voters[msg.sender]) != address(0));
+    ) external checkUser(msg.sender) {
     voters[msg.sender].propose(        
       targets,
       values,
@@ -236,8 +231,7 @@ contract VotableStakingRewards is
     );
   }
 
-  function castVote(uint256 proposalId, uint8 support) external onlyOwner {
-    require(address(voters[msg.sender]) != address(0));
+  function castVote(uint256 proposalId, uint8 support) external onlyOwner checkUser(msg.sender) {
     voters[msg.sender].castVote(proposalId, support);
   }
 
@@ -253,6 +247,11 @@ contract VotableStakingRewards is
     _;
   }
 
+  modifier checkUser(address user) {
+    require(address(voters[user]) != address(0));
+    _;
+  }
+  
   /* ========== EVENTS ========== */
 
   event RewardAdded(uint256 reward);
