@@ -39,7 +39,6 @@ contract VotableStakingRewards is
   uint256 private _totalSupply;
   mapping(address => uint256) private _balances;
   mapping(address => Voter) public voters;
-  uint256 public latestID = 0;
 
   /* ========== CONSTRUCTOR ========== */
 
