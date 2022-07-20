@@ -25,6 +25,10 @@ contract Voter is Ownable {
     _votingToken.delegate(address(this));
   }
 
+  /**
+   * @notice Transfers voting tokens from 'msg.sender' to this voter
+   * @param amount The amount of voting tokens to transfer
+   */
   function addVotes(uint256 amount) external onlyOwner {
     IERC20(address(votingToken)).safeTransferFrom(
       msg.sender,
@@ -33,14 +37,24 @@ contract Voter is Ownable {
     );
   }
 
+  /**
+   * @notice Transfers voting tokens from this voter to 'msg.sender' 
+   * @param amount The amount of voting tokens to transfer
+   */
   function removeVotes(uint256 amount) external onlyOwner {
     IERC20(address(votingToken)).safeTransfer(msg.sender, amount);
   }
 
+  /** 
+   * @notice Casts vote for/against/abstain proposal of voter
+   * @param proposalId id of the proposal to vote for/against/abstain
+   * @param support - If 0, vote against - If 1, vote for - If 2, abstain
+   */
   function castVote(uint256 proposalId, uint8 support) external onlyOwner {
     romulusDelegate.castVote(proposalId, support);
   }
 
+  /// @notice Creates a proposal from this voter
   function propose(
     address[] memory targets,
     uint256[] memory values,
@@ -57,6 +71,10 @@ contract Voter is Ownable {
     );
   }
 
+  /**
+   * @notice Delegate votes of voter to `delegatee`
+   * @param delegatee The address to delegate votes to
+   */
   function delegate(address delegatee) external onlyOwner {
     votingToken.delegate(delegatee);
   }

@@ -57,19 +57,25 @@ contract VotableStakingRewards is
 
   /* ========== VIEWS ========== */
 
+  ///@notice Returns total supply
   function totalSupply() external view override returns (uint256) {
     return _totalSupply;
   }
 
-  /// @notice Returns the total amount a user has staked
+  /** 
+   * @notice Returns the total amount a user has staked
+   * @param account The address of the account to check
+   */ 
   function balanceOf(address account) external view override returns (uint256) {
     return _balances[account];
   }
 
+  /// @notice Returns time rewards are applicable
   function lastTimeRewardApplicable() public view override returns (uint256) {
     return Math.min(block.timestamp, periodFinish);
   }
 
+  /// notice Returns rewards yielded per token
   function rewardPerToken() public view override returns (uint256) {
     if (_totalSupply == 0) {
       return rewardPerTokenStored;
@@ -84,6 +90,7 @@ contract VotableStakingRewards is
       );
   }
 
+  /// @notice Returns earned balance
   function earned(address account) public view override returns (uint256) {
     return
       _balances[account]
@@ -92,13 +99,17 @@ contract VotableStakingRewards is
         .add(rewards[account]);
   }
 
+  /// @notice Returns rewards through a duration of time
   function getRewardForDuration() external view override returns (uint256) {
     return rewardRate.mul(rewardsDuration);
   }
 
   /* ========== MUTATIVE FUNCTIONS ========== */
 
-  /// @notice stakes user tokens into contract
+  /**
+   * @notice Stakes user tokens into contract
+   * @param amount The amount of tokens to stake  
+   */ 
   function stake(uint256 amount)
     external
     nonReentrant
@@ -126,7 +137,10 @@ contract VotableStakingRewards is
     emit Staked(msg.sender, amount);
   }
 
-  /// @notice withdraws staked tokens
+  /**
+   * @notice Withdraws staked tokens
+   * @param amount The amount to withdraw
+   */ 
   function withdraw(uint256 amount)
     public
     override
@@ -144,6 +158,7 @@ contract VotableStakingRewards is
     emit Withdrawn(msg.sender, amount);
   }
 
+  /// @notice Claims user rewards 
   function getReward() public override nonReentrant updateReward(msg.sender) {
     uint256 reward = rewards[msg.sender];
     if (reward > 0) {
@@ -153,7 +168,7 @@ contract VotableStakingRewards is
     }
   }
 
-  /// @notice withdraws all staked tokens and claims any pending rewards
+  /// @notice Withdraws all staked tokens and claims any pending rewards
   function exit() external override {
     withdraw(_balances[msg.sender]);
     getReward();
@@ -214,6 +229,7 @@ contract VotableStakingRewards is
 
   /* ========== VOTER FUNCTIONS ========== */
     
+  /// @notice Creates a proposal from the voter of 'msg.sender'
   function propose(
     address[] memory targets,
     uint256[] memory values,
@@ -230,10 +246,19 @@ contract VotableStakingRewards is
     );
   }
 
+  /** 
+   * @notice Casts vote for/against/abstain proposal using voter of 'msg.sender'
+   * @param proposalId id of the proposal to vote for/against/abstain
+   * @param support - If 0, vote against - If 1, vote for - If 2, abstain
+   */
   function castVote(uint256 proposalId, uint8 support) external onlyOwner checkUser(msg.sender) {
     voters[msg.sender].castVote(proposalId, support);
   }
 
+  /**
+   * @notice Delegate votes from voter of `msg.sender` to `delegatee`
+   * @param delegatee The address to delegate votes to
+   */
   function delegate(address delegatee) external onlyOwner checkUser(msg.sender) {
     voters[msg.sender].delegate(delegatee);
   }
