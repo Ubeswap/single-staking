@@ -32,18 +32,13 @@ contract VotableStakingRewards is
   uint256 public lastUpdateTime;
   uint256 public rewardPerTokenStored;
 
+  IRomulusDelegate public immutable romulusDelegate;
   mapping(address => uint256) public userRewardPerTokenPaid;
   mapping(address => uint256) public rewards;
 
   uint256 private _totalSupply;
   mapping(address => uint256) private _balances;
-
-  // Voters
-  // 0 - Abstain
-  // 1 - For
-  // 2 - Against
-  Voter[3] public delegates;
-  mapping(address => uint8) public userDelegateIdx;
+  mapping(address => Voter) public voters;
 
   /* ========== CONSTRUCTOR ========== */
 
@@ -57,42 +52,30 @@ contract VotableStakingRewards is
     rewardsToken = IERC20(_rewardsToken);
     stakingToken = IERC20(_stakingToken);
     rewardsDistribution = _rewardsDistribution;
-
-    delegates[0] = new Voter(
-      2, // Abstain
-      IVotingDelegates(_stakingToken),
-      _romulusDelegate
-    );
-    delegates[1] = new Voter(
-      1, // For
-      IVotingDelegates(_stakingToken),
-      _romulusDelegate
-    );
-    delegates[2] = new Voter(
-      0, // Against
-      IVotingDelegates(_stakingToken),
-      _romulusDelegate
-    );
+    romulusDelegate = _romulusDelegate;
   }
 
   /* ========== VIEWS ========== */
 
-  function supportOf(address account) external view returns (uint8) {
-    return delegates[userDelegateIdx[account]].support();
-  }
-
+  ///@notice Returns total supply
   function totalSupply() external view override returns (uint256) {
     return _totalSupply;
   }
 
+  /** 
+   * @notice Returns the total amount a user has staked
+   * @param account The address of the account to check
+   */ 
   function balanceOf(address account) external view override returns (uint256) {
     return _balances[account];
   }
 
+  /// @notice Returns time rewards are applicable
   function lastTimeRewardApplicable() public view override returns (uint256) {
     return Math.min(block.timestamp, periodFinish);
   }
 
+  /// notice Returns rewards yielded per token
   function rewardPerToken() public view override returns (uint256) {
     if (_totalSupply == 0) {
       return rewardPerTokenStored;
@@ -107,6 +90,7 @@ contract VotableStakingRewards is
       );
   }
 
+  /// @notice Returns earned balance
   function earned(address account) public view override returns (uint256) {
     return
       _balances[account]
@@ -115,15 +99,19 @@ contract VotableStakingRewards is
         .add(rewards[account]);
   }
 
+  /// @notice Returns rewards through a duration of time
   function getRewardForDuration() external view override returns (uint256) {
     return rewardRate.mul(rewardsDuration);
   }
 
   /* ========== MUTATIVE FUNCTIONS ========== */
 
+  /**
+   * @notice Stakes user tokens into contract
+   * @param amount The amount of tokens to stake  
+   */ 
   function stake(uint256 amount)
     external
-    override
     nonReentrant
     updateReward(msg.sender)
   {
@@ -132,51 +120,45 @@ contract VotableStakingRewards is
     _balances[msg.sender] = _balances[msg.sender].add(amount);
     stakingToken.safeTransferFrom(msg.sender, address(this), amount);
 
-    Voter v = delegates[userDelegateIdx[msg.sender]];
+    if (address(voters[msg.sender]) == address(0)) {
+      voters[msg.sender] = new Voter(
+        IVotingDelegates(address(stakingToken)),
+        romulusDelegate
+      );
+    } 
+
+    Voter v = voters[msg.sender];
     require(
       stakingToken.approve(address(v), amount),
       "Approve to voter failed"
     );
-    v.addVotes(amount);
 
+    IERC20(address(stakingToken)).safeTransferFrom( address(this), address(v), amount);
     emit Staked(msg.sender, amount);
   }
 
+  /**
+   * @notice Withdraws staked tokens
+   * @param amount The amount to withdraw
+   */ 
   function withdraw(uint256 amount)
     public
     override
     nonReentrant
     updateReward(msg.sender)
+    checkUser(msg.sender)
   {
     require(amount > 0, "Cannot withdraw 0");
     _totalSupply = _totalSupply.sub(amount);
     _balances[msg.sender] = _balances[msg.sender].sub(amount);
-
-    Voter v = delegates[userDelegateIdx[msg.sender]];
+    Voter v = voters[msg.sender];
     v.removeVotes(amount);
 
     stakingToken.safeTransfer(msg.sender, amount);
     emit Withdrawn(msg.sender, amount);
   }
 
-  function changeDelegateIdx(uint8 nextIdx) external nonReentrant {
-    require(nextIdx < 3, "newDelegateIdx out of bounds.");
-    uint8 previousIdx = userDelegateIdx[msg.sender];
-    Voter previous = delegates[previousIdx];
-    uint256 balance = _balances[msg.sender];
-    previous.removeVotes(balance);
-
-    Voter next = delegates[nextIdx];
-    require(
-      stakingToken.approve(address(next), balance),
-      "Approve to voter failed"
-    );
-    next.addVotes(balance);
-
-    userDelegateIdx[msg.sender] = nextIdx;
-    emit DelegateIdxChanged(previousIdx, nextIdx);
-  }
-
+  /// @notice Claims user rewards 
   function getReward() public override nonReentrant updateReward(msg.sender) {
     uint256 reward = rewards[msg.sender];
     if (reward > 0) {
@@ -186,6 +168,7 @@ contract VotableStakingRewards is
     }
   }
 
+  /// @notice Withdraws all staked tokens and claims any pending rewards
   function exit() external override {
     withdraw(_balances[msg.sender]);
     getReward();
@@ -244,6 +227,42 @@ contract VotableStakingRewards is
     emit RewardsDurationUpdated(rewardsDuration);
   }
 
+  /* ========== VOTER FUNCTIONS ========== */
+    
+  /// @notice Creates a proposal from the voter of 'msg.sender'
+  function propose(
+    address[] memory targets,
+    uint256[] memory values,
+    string[] memory signatures,
+    bytes[] memory calldatas,
+    string memory description
+    ) external checkUser(msg.sender) {
+    voters[msg.sender].propose(        
+      targets,
+      values,
+      signatures,
+      calldatas,
+      description
+    );
+  }
+
+  /** 
+   * @notice Casts vote for/against/abstain proposal using voter of 'msg.sender'
+   * @param proposalId id of the proposal to vote for/against/abstain
+   * @param support - If 0, vote against - If 1, vote for - If 2, abstain
+   */
+  function castVote(uint256 proposalId, uint8 support) external onlyOwner checkUser(msg.sender) {
+    voters[msg.sender].castVote(proposalId, support);
+  }
+
+  /**
+   * @notice Delegate votes from voter of `msg.sender` to `delegatee`
+   * @param delegatee The address to delegate votes to
+   */
+  function delegate(address delegatee) external onlyOwner checkUser(msg.sender) {
+    voters[msg.sender].delegate(delegatee);
+  }
+
   /* ========== MODIFIERS ========== */
 
   modifier updateReward(address account) {
@@ -253,6 +272,11 @@ contract VotableStakingRewards is
       rewards[account] = earned(account);
       userRewardPerTokenPaid[account] = rewardPerTokenStored;
     }
+    _;
+  }
+
+  modifier checkUser(address user) {
+    require(address(voters[user]) != address(0));
     _;
   }
 
