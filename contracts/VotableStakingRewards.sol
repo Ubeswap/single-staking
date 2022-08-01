@@ -57,25 +57,25 @@ contract VotableStakingRewards is
 
   /* ========== VIEWS ========== */
 
-  ///@notice Returns total supply
+  ///@notice Returns the total amount of tokens staked into the contract
   function totalSupply() external view override returns (uint256) {
     return _totalSupply;
   }
 
   /** 
-   * @notice Returns the total amount a user has staked
-   * @param account The address of the account to check
+   * @notice Returns the total amount of tokens a user has staked
+   * @param account The address of the account to check balance of
    */ 
   function balanceOf(address account) external view override returns (uint256) {
     return _balances[account];
   }
 
-  /// @notice Returns time rewards are applicable
+  /// @notice Returns the remaining time that the reward rate is available
   function lastTimeRewardApplicable() public view override returns (uint256) {
     return Math.min(block.timestamp, periodFinish);
   }
 
-  /// notice Returns rewards yielded per token
+  /// @notice Returns projected amount of rewards to be gained over time per token
   function rewardPerToken() public view override returns (uint256) {
     if (_totalSupply == 0) {
       return rewardPerTokenStored;
@@ -90,7 +90,7 @@ contract VotableStakingRewards is
       );
   }
 
-  /// @notice Returns earned balance
+  /// @notice Returns the total amount of rewards 'msg.sender' has yielded in rewards
   function earned(address account) public view override returns (uint256) {
     return
       _balances[account]
@@ -99,7 +99,7 @@ contract VotableStakingRewards is
         .add(rewards[account]);
   }
 
-  /// @notice Returns rewards through a duration of time
+  /// @notice Returns amount of rewards available throughout its duration
   function getRewardForDuration() external view override returns (uint256) {
     return rewardRate.mul(rewardsDuration);
   }
@@ -107,7 +107,7 @@ contract VotableStakingRewards is
   /* ========== MUTATIVE FUNCTIONS ========== */
 
   /**
-   * @notice Stakes user tokens into contract
+   * @notice Stakes tokens into contract from 'msg.sender'
    * @param amount The amount of tokens to stake  
    */ 
   function stake(uint256 amount)
@@ -118,7 +118,6 @@ contract VotableStakingRewards is
     require(amount > 0, "Cannot stake 0");
     _totalSupply = _totalSupply.add(amount);
     _balances[msg.sender] = _balances[msg.sender].add(amount);
-    stakingToken.safeTransferFrom(msg.sender, address(this), amount);
 
     if (address(voters[msg.sender]) == address(0)) {
       voters[msg.sender] = new Voter(
@@ -133,12 +132,12 @@ contract VotableStakingRewards is
       "Approve to voter failed"
     );
 
-    IERC20(address(stakingToken)).safeTransferFrom( address(this), address(v), amount);
+    stakingToken.safeTransferFrom( msg.sender, address(v), amount);
     emit Staked(msg.sender, amount);
   }
 
   /**
-   * @notice Withdraws staked tokens
+   * @notice Withdraws staked tokens to 'msg.sender'
    * @param amount The amount to withdraw
    */ 
   function withdraw(uint256 amount)
@@ -146,7 +145,7 @@ contract VotableStakingRewards is
     override
     nonReentrant
     updateReward(msg.sender)
-    checkUser(msg.sender)
+    hasVoter()
   {
     require(amount > 0, "Cannot withdraw 0");
     _totalSupply = _totalSupply.sub(amount);
@@ -158,7 +157,7 @@ contract VotableStakingRewards is
     emit Withdrawn(msg.sender, amount);
   }
 
-  /// @notice Claims user rewards 
+  /// @notice Claims rewards of 'msg.sender'
   function getReward() public override nonReentrant updateReward(msg.sender) {
     uint256 reward = rewards[msg.sender];
     if (reward > 0) {
@@ -236,7 +235,7 @@ contract VotableStakingRewards is
     string[] memory signatures,
     bytes[] memory calldatas,
     string memory description
-    ) external checkUser(msg.sender) {
+    ) external hasVoter() {
     voters[msg.sender].propose(        
       targets,
       values,
@@ -251,7 +250,7 @@ contract VotableStakingRewards is
    * @param proposalId id of the proposal to vote for/against/abstain
    * @param support - If 0, vote against - If 1, vote for - If 2, abstain
    */
-  function castVote(uint256 proposalId, uint8 support) external onlyOwner checkUser(msg.sender) {
+  function castVote(uint256 proposalId, uint8 support) external hasVoter() {
     voters[msg.sender].castVote(proposalId, support);
   }
 
@@ -259,7 +258,7 @@ contract VotableStakingRewards is
    * @notice Delegate votes from voter of `msg.sender` to `delegatee`
    * @param delegatee The address to delegate votes to
    */
-  function delegate(address delegatee) external onlyOwner checkUser(msg.sender) {
+  function delegate(address delegatee) external hasVoter() {
     voters[msg.sender].delegate(delegatee);
   }
 
@@ -275,8 +274,8 @@ contract VotableStakingRewards is
     _;
   }
 
-  modifier checkUser(address user) {
-    require(address(voters[user]) != address(0));
+  modifier hasVoter() {
+    require(address(voters[msg.sender]) != address(0));
     _;
   }
 
