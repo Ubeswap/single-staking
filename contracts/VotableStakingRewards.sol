@@ -11,6 +11,7 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "./interfaces/IRomulusDelegate.sol";
 import "./interfaces/IStakingRewards.sol";
 import "./RewardsDistributionRecipient.sol";
+import "./interfaces/IPoolManager.sol";
 import "./Voter.sol";
 
 // Base: https://github.com/Ubeswap/ubeswap-farming/blob/master/contracts/synthetix/contracts/StakingRewards.sol
@@ -33,6 +34,7 @@ contract VotableStakingRewards is
   uint256 public rewardPerTokenStored;
 
   IRomulusDelegate public immutable romulusDelegate;
+  IPoolManager public poolManager;
   mapping(address => uint256) public userRewardPerTokenPaid;
   mapping(address => uint256) public rewards;
 
@@ -116,7 +118,7 @@ contract VotableStakingRewards is
     updateReward(msg.sender)
   {
     require(amount > 0, "Cannot stake 0");
-    _totalSupply = _totalSupply.add(amount);
+    _totalSupply = _totalSupply.add(amount); //do this at the end? to make sure everything proceeds correctly
     _balances[msg.sender] = _balances[msg.sender].add(amount);
 
     if (address(voters[msg.sender]) == address(0)) {
@@ -152,7 +154,7 @@ contract VotableStakingRewards is
     _balances[msg.sender] = _balances[msg.sender].sub(amount);
     Voter v = voters[msg.sender];
     v.removeVotes(amount);
-
+    //BRING THIS UP TO BRIAN (remove middle man here?) instead of transferring from voter to staking token, transfer from voter to msg.sender?
     stakingToken.safeTransfer(msg.sender, amount);
     emit Withdrawn(msg.sender, amount);
   }
@@ -228,6 +230,80 @@ contract VotableStakingRewards is
 
   /* ========== VOTER FUNCTIONS ========== */
     
+    /*development:
+      1. set up locking feature
+      2. make sure voter can only allocate up to the amount of ube they have
+      3. calculate the weights at the end of the locking period
+    */
+
+
+uint256 lockDuration = 6 days;
+uint256 lockTime;
+mapping(address => uint256) userLocked;
+mapping(address => mapping(uint256 => uint256)) userWeights;
+mapping(uint256 => uint256) poolWeights;
+
+function getPoolWeight(uint256 poolId) public view returns(uint256) {
+  return poolWeights[poolId];
+}
+
+function allocate_pool_weight(uint256 poolId, uint256 amount) external{
+  require(this.isLocked());
+  require(amount > 0, "Cannot allocate 0");
+  Voter v = voters[msg.sender];
+  require(rewardsToken.balanceOf(address(v)) - userLocked[address(v)] >= amount, "Cannot allocate more than you have");
+    
+  userLocked[address(v)] += amount;
+  userWeights[address(v)][poolId] += amount;
+  poolWeights[poolId] += amount;
+}
+
+function remove_pool_weight(uint256 poolId, uint256 amount) external {
+  require(!this.isLocked(), "Cannot remove weight, period is locked");
+
+  Voter v = voters[msg.sender];
+  require(amount > 0, "Cannot remove 0");
+  require(userWeights[address(v)][poolId] >= amount, "Cannot remove more than you have");
+
+  userLocked[address(v)] -= amount;
+  userWeights[address(v)][poolId] -= amount; // Dont forget to check for underflow
+  poolWeights[poolId] -= amount;
+}
+
+// function unstake(uint256 amount) external {
+//   require(amount > 0, "Cannot remove 0");
+//   Voter v = voters[msg.sender];
+//   require(this.balanceOf(address(v)) - userLocked[address(v)]>= amount, "Cannot remove more than you have");
+//   uint256 withdrawable = this.balanceOf(address(v));
+//   // if (this.isLocked()) {
+//   //    withdrawable -= userLocked[address(v)];
+//   // }
+//   withdrawable -= userLocked[address(v)];
+//   require(amount <= withdrawable, "Withdrawing too much");
+//   userLocked[address(v)] -= amount;
+// }
+
+function lock() external{
+  require(!this.isLocked(), "Already locked");
+
+  uint256 poolsCount = poolManager.poolsCount();
+  for (uint256 i = 0; i < poolsCount; i++) {
+    poolManager.setWeight(poolManager.poolsByIndex(i), poolWeights[i]);
+  }
+
+  lockTime = block.timestamp;
+}
+
+
+function isLocked() external view returns (bool) {
+  uint256 timeElapsed = block.timestamp - lockTime;
+  return timeElapsed < lockDuration;
+}
+
+function setLockDuration(uint256 _lockDuration) external onlyOwner {
+  lockDuration =  _lockDuration;
+}
+
   /// @notice Creates a proposal from the voter of 'msg.sender'
   function propose(
     address[] memory targets,
