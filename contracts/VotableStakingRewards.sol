@@ -13,6 +13,7 @@ import "./interfaces/IStakingRewards.sol";
 import "./RewardsDistributionRecipient.sol";
 import "./interfaces/IPoolManager.sol";
 import "./Voter.sol";
+import "./interfaces/IPoolManager.sol";
 
 // Base: https://github.com/Ubeswap/ubeswap-farming/blob/master/contracts/synthetix/contracts/StakingRewards.sol
 contract VotableStakingRewards is
@@ -150,6 +151,7 @@ contract VotableStakingRewards is
     hasVoter()
   {
     require(amount > 0, "Cannot withdraw 0");
+    require(this.unstake(amount) == true, "Unstake failed");
     _totalSupply = _totalSupply.sub(amount);
     _balances[msg.sender] = _balances[msg.sender].sub(amount);
     Voter v = voters[msg.sender];
@@ -270,18 +272,14 @@ function remove_pool_weight(uint256 poolId, uint256 amount) external {
   poolWeights[poolId] -= amount;
 }
 
-// function unstake(uint256 amount) external {
-//   require(amount > 0, "Cannot remove 0");
-//   Voter v = voters[msg.sender];
-//   require(this.balanceOf(address(v)) - userLocked[address(v)]>= amount, "Cannot remove more than you have");
-//   uint256 withdrawable = this.balanceOf(address(v));
-//   // if (this.isLocked()) {
-//   //    withdrawable -= userLocked[address(v)];
-//   // }
-//   withdrawable -= userLocked[address(v)];
-//   require(amount <= withdrawable, "Withdrawing too much");
-//   userLocked[address(v)] -= amount;
-// }
+function unstake(uint256 amount) external view returns(bool){
+  require(amount > 0, "Cannot remove 0");
+  Voter v = voters[msg.sender];
+  uint256 withdrawable = this.balanceOf(address(v));
+  withdrawable -= userLocked[address(v)];
+  require(amount <= withdrawable, "Withdrawing too much");
+  return true;
+}
 
 function lock() external{
   require(!this.isLocked(), "Already locked");
