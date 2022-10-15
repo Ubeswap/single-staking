@@ -11,7 +11,6 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "./interfaces/IRomulusDelegate.sol";
 import "./interfaces/IStakingRewards.sol";
 import "./RewardsDistributionRecipient.sol";
-import "./interfaces/IPoolManager.sol";
 import "./Voter.sol";
 import "./interfaces/IPoolManager.sol";
 
