@@ -152,18 +152,6 @@ contract("VotableStakingRewards", (accounts) => {
 
   describe("#allocate_pool_weight", () => {
     it("should work", async () => {
-      // await token.transferFrom(sender, v1, amount)
-      // await token.transferFrom(sender, v2, amount)
-      // await token.approve(stakingRewards.address, amount);
-      // await token.approve(stakingRewards.address, amount, {from: v1});
-      // await token.approve(stakingRewards.address, amount, {from: v2});
-      // await stakingRewards.stake(amount);
-      // await stakingRewards.stake(amount, {from: v1});
-      // await stakingRewards.stake(amount, {from: v2});
-      // voter0 = await Voter.at(await stakingRewards.voters(sender));
-      // voter1 = await Voter.at(await stakingRewards.voters(v1));    
-      // voter2 = await Voter.at(await stakingRewards.voters(v2));
-
 
       await stakingRewards.allocate_pool_weight(1, 100);
       await stakingRewards.allocate_pool_weight(1, 100, {from: v1});
