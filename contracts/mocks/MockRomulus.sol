@@ -3,11 +3,13 @@
 pragma solidity ^0.8.3;
 
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
+import "../interfaces/IRomulusDelegate.sol";
 
-contract MockRomulus {
+contract MockRomulus is IRomulusDelegate {
   mapping(uint256 => uint256) public proposalAgainstVotes;
   mapping(uint256 => uint256) public proposalForVotes;
   mapping(uint256 => uint256) public proposalAbstainVotes;
+  uint256 public proposalsMade;
 
   IERC20 public votingToken;
 
@@ -25,5 +27,14 @@ contract MockRomulus {
       proposalAbstainVotes[proposalId] += userBalance;
     }
   }
-}
 
+  function propose(
+    address[] memory,
+    uint256[] memory,
+    string[] memory,
+    bytes[] memory,
+    string memory
+    ) external {
+    proposalsMade += 1;
+  }
+}

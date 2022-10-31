@@ -12,22 +12,23 @@ import "./interfaces/IRomulusDelegate.sol";
 contract Voter is Ownable {
   using SafeERC20 for IERC20;
 
-  uint8 public immutable support;
   IVotingDelegates public immutable votingToken;
   IRomulusDelegate public immutable romulusDelegate;
 
   constructor(
-    uint8 _support,
     IVotingDelegates _votingToken,
     IRomulusDelegate _romulusDelegate
   ) {
-    support = _support;
     votingToken = _votingToken;
     romulusDelegate = _romulusDelegate;
 
     _votingToken.delegate(address(this));
   }
 
+  /**
+   * @notice Transfers voting tokens from 'msg.sender' to this voter
+   * @param amount The amount of voting tokens to transfer
+   */
   function addVotes(uint256 amount) external onlyOwner {
     IERC20(address(votingToken)).safeTransferFrom(
       msg.sender,
@@ -36,11 +37,45 @@ contract Voter is Ownable {
     );
   }
 
+  /**
+   * @notice Transfers voting tokens from this voter to 'msg.sender' 
+   * @param amount The amount of voting tokens to transfer
+   */
   function removeVotes(uint256 amount) external onlyOwner {
     IERC20(address(votingToken)).safeTransfer(msg.sender, amount);
   }
 
-  function castVote(uint256 proposalId) external {
+  /** 
+   * @notice Casts vote for/against/abstain proposal of voter
+   * @param proposalId id of the proposal to vote for/against/abstain
+   * @param support - If 0, vote against - If 1, vote for - If 2, abstain
+   */
+  function castVote(uint256 proposalId, uint8 support) external onlyOwner {
     romulusDelegate.castVote(proposalId, support);
+  }
+
+  /// @notice Creates a proposal from this voter
+  function propose(
+    address[] memory targets,
+    uint256[] memory values,
+    string[] memory signatures,
+    bytes[] memory calldatas,
+    string memory description
+    ) external onlyOwner {
+      romulusDelegate.propose(
+      targets,
+      values,
+      signatures,
+      calldatas,
+      description
+    );
+  }
+
+  /**
+   * @notice Delegate votes of voter to `delegatee`
+   * @param delegatee The address to delegate votes to
+   */
+  function delegate(address delegatee) external onlyOwner {
+    votingToken.delegate(delegatee);
   }
 }
