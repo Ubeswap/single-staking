@@ -28,9 +28,12 @@ rpc = ({ method, params }) => {
   });
 };
 
+const AGAINST = 0;
+const FOR = 1;
+const ABSTAIN = 2;
+
 contract("VotableStakingRewards", (accounts) => {
-  const amount = 100;
-  let token, stakingRewards, poolManager;
+  let token, stakingRewards, poolManager, voter0, voter1, voter2;
 
   before(async () => {
     [sender, a1, proposer, v1, v2, v3, v4, stakingToken1, stakingToken2] =
@@ -56,85 +59,121 @@ contract("VotableStakingRewards", (accounts) => {
 
   describe("#constructor/stake", () => {
     it("should work", async () => {
-      await token.transferFrom(sender, v1, amount);
-      await token.transferFrom(sender, v2, amount);
+      await token.transferFrom(sender, v1, 50);
+      await token.transferFrom(sender, v2, 25);
+
+      await token.approve(stakingRewards.address, 100);
+      await token.approve(stakingRewards.address, 50, { from: v1 });
+      await token.approve(stakingRewards.address, 25, { from: v2 });
 
       const balanceBefore = await token.balanceOf(sender);
-
-      await token.approve(stakingRewards.address, amount * 2);
-      await token.approve(stakingRewards.address, amount, { from: v1 });
-      await token.approve(stakingRewards.address, amount, { from: v2 });
-      await stakingRewards.stake(amount);
-      await stakingRewards.stake(amount, { from: v1 });
-      await stakingRewards.stake(amount, { from: v2 });
-
+      await stakingRewards.stake(100);
+      const balanceAfter = await token.balanceOf(sender);
+      balanceBefore.sub(balanceAfter).should.be.eq.BN(100);
+      (await stakingRewards.balanceOf(sender)).should.be.eq.BN(100);
       voter0 = await Voter.at(await stakingRewards.voters(sender));
+      (await voter0.controller()).should.be.equal(stakingRewards.address);
+      (await voter0.user()).should.be.equal(sender);
+      (await token.balanceOf(voter0.address)).should.be.eq.BN(100);
+      (await token.getCurrentVotes(voter0.address)).should.be.eq.BN(100);
+
+      await stakingRewards.stake(50, { from: v1 });
       voter1 = await Voter.at(await stakingRewards.voters(v1));
+      (await voter1.controller()).should.be.equal(stakingRewards.address);
+      (await voter1.user()).should.be.equal(v1);
+
+      await stakingRewards.stake(25, { from: v2 });
       voter2 = await Voter.at(await stakingRewards.voters(v2));
-
-      const balanceAfterV0 = await token.balanceOf(sender);
-
-      balanceBefore.sub(balanceAfterV0).should.be.eq.BN(amount);
-      (await stakingRewards.balanceOf(sender)).should.be.eq.BN(amount);
+      (await voter2.controller()).should.be.equal(stakingRewards.address);
+      (await voter2.user()).should.be.equal(v2);
 
       (await token.balanceOf(stakingRewards.address)).should.be.eq.BN(0);
-      (await token.balanceOf(voter0.address)).should.be.eq.BN(amount);
-      (await token.getCurrentVotes(voter0.address)).should.be.eq.BN(amount);
     });
   });
 
-  // describe("#propose", () => {
-  //   it("should work", async () => {
-  //     await stakingRewards.propose([], [], [], [], "do nothing", {from: sender});
-  //     await stakingRewards.propose([], [], [], [], "do nothing", {from: v1});
-  //     await stakingRewards.propose([], [], [], [], "do nothing", {from: v2});
-  //     const proposals = await romulus.proposalsMade();
-  //     (proposals).should.be.eq.BN(3); // Against
-  //   });
-  // });
+  describe("voting", () => {
+    it("should let user delegate", async () => {
+      (await token.getCurrentVotes(voter2.address)).should.be.eq.BN(25);
+      await voter0.delegate(voter2.address);
+      (await token.getCurrentVotes(voter2.address)).should.be.eq.BN(125);
+    });
 
-  // describe("#Voter:castVote", () => {
-  //   it("should work", async () => {
+    it("does not let non-user delegate", async () => {
+      await voter0
+        .delegate(v2, { from: v2 })
+        .should.be.rejectedWith("Voter: only user");
+    });
 
-  //     const proposalIdV0 = 0;
-  //     const proposalIdV1 = 1;
-  //     const proposalIdV2 = 2;
-  //     const abstainBeforeV0 = await romulus.proposalAbstainVotes(proposalIdV0);
-  //     const forBeforeV0 = await romulus.proposalForVotes(proposalIdV0);
-  //     const againstBeforeV0 = await romulus.proposalAgainstVotes(proposalIdV0);
-  //     const abstainBeforeV1 = await romulus.proposalAbstainVotes(proposalIdV1);
-  //     const forBeforeV1 = await romulus.proposalForVotes(proposalIdV1);
-  //     const againstBeforeV1 = await romulus.proposalAgainstVotes(proposalIdV1);
-  //     const abstainBeforeV2 = await romulus.proposalAbstainVotes(proposalIdV2);
-  //     const forBeforeV2 = await romulus.proposalForVotes(proposalIdV2);
-  //     const againstBeforeV2 = await romulus.proposalAgainstVotes(proposalIdV2);
+    it("should let user propose", async () => {
+      await voter0.propose(
+        [token.address],
+        values,
+        signatures,
+        [],
+        "do nothing",
+        { from: sender }
+      );
+      await voter1.propose(
+        [token.address],
+        values,
+        signatures,
+        [],
+        "do nothing",
+        { from: v1 }
+      );
+      await voter2.propose(
+        [token.address],
+        values,
+        signatures,
+        [],
+        "do nothing",
+        { from: v2 }
+      );
+      (await romulus.proposalsMade()).should.be.eq.BN(3);
+    });
 
-  //     await stakingRewards.castVote(proposalIdV0, 0);
-  //     await stakingRewards.castVote(proposalIdV1, 1);
-  //     await stakingRewards.castVote(proposalIdV2, 2);
-  //     const abstainAfterV0 = await romulus.proposalAbstainVotes(proposalIdV0);
-  //     const forAfterV0 = await romulus.proposalForVotes(proposalIdV0);
-  //     const againstAfterV0 = await romulus.proposalAgainstVotes(proposalIdV0);
-  //     const abstainAfterV1 = await romulus.proposalAbstainVotes(proposalIdV1);
-  //     const forAfterV1 = await romulus.proposalForVotes(proposalIdV1);
-  //     const againstAfterV1 = await romulus.proposalAgainstVotes(proposalIdV1);
-  //     const abstainAfterV2 = await romulus.proposalAbstainVotes(proposalIdV2);
-  //     const forAfterV2 = await romulus.proposalForVotes(proposalIdV2);
-  //     const againstAfterV2 = await romulus.proposalAgainstVotes(proposalIdV2);
+    it("does not let non-user propose", async () => {
+      await voter0
+        .propose([token.address], values, signatures, [], "do nothing", {
+          from: v1,
+        })
+        .should.be.rejectedWith("Voter: only user");
+    });
 
-  //     abstainAfterV0.sub(abstainBeforeV0).should.be.eq.BN(0);
-  //     forAfterV0.sub(forBeforeV0).should.be.eq.BN(0);
-  //     againstAfterV0.sub(againstBeforeV0).should.be.eq.BN(amount);
+    const proposal0 = 0;
 
-  //     abstainAfterV1.sub(abstainBeforeV1).should.be.eq.BN(0);
-  //     forAfterV1.sub(forBeforeV1).should.be.eq.BN(amount);
-  //     againstAfterV1.sub(againstBeforeV1).should.be.eq.BN(0);
+    it("should let user vote", async () => {
+      const abstainBefore = await romulus.proposalAbstainVotes(proposal0);
+      const forBefore = await romulus.proposalForVotes(proposal0);
+      const againstBefore = await romulus.proposalAgainstVotes(proposal0);
 
-  //     abstainAfterV2.sub(abstainBeforeV2).should.be.eq.BN(amount);
-  //     forAfterV2.sub(forBeforeV2).should.be.eq.BN(0);
-  //     againstAfterV2.sub(againstBeforeV2).should.be.eq.BN(0);
-  //   });
-  // });
+      await voter0.castVote(proposal0, AGAINST);
+      await voter1.castVote(proposal0, FOR, { from: v1 });
+      await voter2.castVote(proposal0, ABSTAIN, { from: v2 });
+
+      const abstainAfter = await romulus.proposalAbstainVotes(proposal0);
+      const forAfter = await romulus.proposalForVotes(proposal0);
+      const againstAfter = await romulus.proposalAgainstVotes(proposal0);
+
+      abstainAfter.sub(abstainBefore).should.be.eq.BN(125);
+      forAfter.sub(forBefore).should.be.eq.BN(50);
+      againstAfter.sub(againstBefore).should.be.eq.BN(0);
+    });
+
+    it("does not let non-user vote", async () => {
+      await voter0
+        .castVote(proposal0, FOR, {
+          from: v1,
+        })
+        .should.be.rejectedWith("Voter: only user");
+    });
+
+    it("does not let non-controller removeVotes", async () => {
+      await voter0
+        .removeVotes(sender, 100)
+        .should.be.rejectedWith("Voter: only controller");
+    });
+  });
 
   // describe("#exit", () => {
   //   it("should work", async () => {

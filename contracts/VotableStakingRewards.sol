@@ -24,6 +24,8 @@ contract VotableStakingRewards is
 
   /* ========== STATE VARIABLES ========== */
 
+  IRomulusDelegate public immutable romulusDelegate;
+
   IERC20 public rewardsToken;
   IERC20 public stakingToken;
   uint256 public periodFinish = 0;
@@ -32,14 +34,13 @@ contract VotableStakingRewards is
   uint256 public lastUpdateTime;
   uint256 public rewardPerTokenStored;
 
+  IPoolManager public poolManager;
   uint256 public lockDuration;
   uint256 public lockTime;
   mapping(address => uint256) public userLocked;
   mapping(address => mapping(uint256 => uint256)) public userWeights;
   mapping(uint256 => uint256) public poolWeights;
 
-  IRomulusDelegate public immutable romulusDelegate;
-  IPoolManager public poolManager;
   mapping(address => uint256) public userRewardPerTokenPaid;
   mapping(address => uint256) public rewards;
 

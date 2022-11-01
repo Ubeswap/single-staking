@@ -2,8 +2,8 @@
 
 pragma solidity ^0.8.16;
 
-import "@openzeppelin/contracts/interfaces/IERC20.sol";
 import "../interfaces/IRomulusDelegate.sol";
+import "./MockVotingToken.sol";
 
 contract MockRomulus is IRomulusDelegate {
   mapping(uint256 => uint256) public proposalAgainstVotes;
@@ -11,20 +11,20 @@ contract MockRomulus is IRomulusDelegate {
   mapping(uint256 => uint256) public proposalAbstainVotes;
   uint256 public proposalsMade;
 
-  IERC20 public votingToken;
+  MockVotingToken public votingToken;
 
-  constructor(IERC20 _votingToken) {
+  constructor(MockVotingToken _votingToken) {
     votingToken = _votingToken;
   }
 
   function castVote(uint256 proposalId, uint8 support) external override {
-    uint256 userBalance = votingToken.balanceOf(msg.sender);
+    uint256 votes = votingToken.getCurrentVotes(msg.sender);
     if (support == 0) {
-      proposalAgainstVotes[proposalId] += userBalance;
+      proposalAgainstVotes[proposalId] += votes;
     } else if (support == 1) {
-      proposalForVotes[proposalId] += userBalance;
+      proposalForVotes[proposalId] += votes;
     } else if (support == 2) {
-      proposalAbstainVotes[proposalId] += userBalance;
+      proposalAbstainVotes[proposalId] += votes;
     }
   }
 
