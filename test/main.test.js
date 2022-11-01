@@ -7,6 +7,7 @@ require("chai")
 const VotableStakingRewards = artifacts.require("VotableStakingRewards");
 const MockRomulus = artifacts.require("MockRomulus");
 const MockVotingToken = artifacts.require("MockVotingToken");
+const MockPoolManager = artifacts.require("MockPoolManager");
 const Voter = artifacts.require("Voter");
 
 rpc = ({ method, params }) => {
@@ -29,22 +30,26 @@ rpc = ({ method, params }) => {
 
 contract("VotableStakingRewards", (accounts) => {
   const amount = 100;
-  let token, stakingRewards;
+  let token, stakingRewards, poolManager;
 
   before(async () => {
-    [sender, a1, proposer, v1, v2, v3, v4, a2, a3, a4, a5, a6] = accounts;
+    [sender, a1, proposer, v1, v2, v3, v4, stakingToken1, stakingToken2] =
+      accounts;
     values = ["0"];
     signatures = ["getBalanceOf(address)"];
     token = await MockVotingToken.new();
     romulus = await MockRomulus.new(token.address);
 
+    poolManager = await MockPoolManager.new();
+    await poolManager.addPool(stakingToken1);
+    await poolManager.addPool(stakingToken2);
     stakingRewards = await VotableStakingRewards.new(
       sender,
       sender,
       token.address,
       token.address,
       romulus.address,
-      sender, // TODO: MockPoolManager
+      poolManager.address,
       60 * 60 * 24 * 6 // 6 days
     );
   });
@@ -191,6 +196,22 @@ contract("VotableStakingRewards", (accounts) => {
       (await stakingRewards.userWeights(v2, 1)).should.be.eq.BN(2);
       (await stakingRewards.userLocked(v2)).should.be.eq.BN(2);
       (await stakingRewards.poolWeights(1)).should.be.eq.BN(5);
+    });
+
+    it("does not let non-owner syncWeights", async () => {
+      await stakingRewards
+        .syncWeights(0, 2, { from: v1 })
+        .should.be.rejectedWith(
+          "Only the contract owner may perform this action"
+        );
+    });
+
+    it("lets owner sync weights", async () => {
+      (await poolManager.weights(0)).should.be.eq.BN(0);
+      (await poolManager.weights(1)).should.be.eq.BN(0);
+      await stakingRewards.syncWeights(0, 2);
+      (await poolManager.weights(0)).should.be.eq.BN(0);
+      (await poolManager.weights(1)).should.be.eq.BN(5);
     });
 
     it("does not let non-owner lock", async () => {
