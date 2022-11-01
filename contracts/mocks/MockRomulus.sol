@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.3;
+pragma solidity ^0.8.16;
 
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
 import "../interfaces/IRomulusDelegate.sol";
@@ -17,7 +17,7 @@ contract MockRomulus is IRomulusDelegate {
     votingToken = _votingToken;
   }
 
-  function castVote(uint256 proposalId, uint8 support) external {
+  function castVote(uint256 proposalId, uint8 support) external override {
     uint256 userBalance = votingToken.balanceOf(msg.sender);
     if (support == 0) {
       proposalAgainstVotes[proposalId] += userBalance;
@@ -34,7 +34,7 @@ contract MockRomulus is IRomulusDelegate {
     string[] memory,
     bytes[] memory,
     string memory
-    ) external {
+  ) external override {
     proposalsMade += 1;
   }
 }

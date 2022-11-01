@@ -13,6 +13,78 @@ import "./RewardsDistributionRecipient.sol";
 import "./Voter.sol";
 import "./interfaces/IPoolManager.sol";
 
+struct GaugeData {
+  uint256 lockDuration;
+  uint256 lockTime;
+  mapping(address => uint256) userLocked;
+  mapping(address => mapping(uint256 => uint256)) userWeights;
+  mapping(uint256 => uint256) poolWeights;
+}
+
+library GaugeLibrary {
+  /// @notice Returns whether the contract is currently locked.
+  function isLocked(GaugeData storage self) public view returns (bool) {
+    uint256 timeElapsed = block.timestamp - self.lockTime;
+    return timeElapsed < self.lockDuration;
+  }
+
+  /// @notice Allocates staked tokens towards a pool. If `lock` is called, these tokens will be
+  /// locked for `lockDuration` seconds.
+  function allocatePoolWeight(
+    GaugeData storage self,
+    uint256 poolId,
+    uint256 amount
+  ) public {
+    require(
+      amount + self.userLocked[msg.sender] <= this.balanceOf(msg.sender),
+      "Allocating too much"
+    );
+
+    self.userLocked[msg.sender] = self.userLocked[msg.sender].add(amount);
+    self.userWeights[msg.sender][poolId] = self.userWeights[msg.sender][poolId].add(amount);
+    self.poolWeights[poolId] = self.poolWeights[poolId].add(amount);
+  }
+
+  /// @notice Removes staked tokens from a pool and unlocks them.
+  function removePoolWeight(
+    GaugeData storage self,
+    uint256 poolId,
+    uint256 amount
+  ) public {
+    require(!GaugeLibrary.isLocked(self), "Period locked");
+    require(self.userWeights[msg.sender][poolId] >= amount, "Removing too much");
+
+    self.userLocked[msg.sender] = self.userLocked[msg.sender].sub(amount);
+    self.userWeights[msg.sender][poolId] = self.userWeights[msg.sender][poolId].sub(amount);
+    self.poolWeights[poolId] = self.poolWeights[poolId].sub(amount);
+  }
+
+  /* ========== RESTRICTED FUNCTIONS ========== */
+
+  function syncWeights(
+    GaugeData storage self,
+    uint256 start,
+    uint256 end
+  ) public {
+    uint256 poolsCount = self.poolManager.poolsCount();
+    if (end > poolsCount) {
+      end = poolsCount;
+    }
+    for (uint256 i = start; i < end; i++) {
+      self.poolManager.setWeight(self.poolManager.poolsByIndex(i), self.poolWeights[i]);
+    }
+  }
+
+  function lock(GaugeData storage self) public {
+    require(!self.isLocked(), "Already locked");
+    self.lockTime = block.timestamp;
+  }
+
+  function setLockDuration(GaugeData storage self, uint256 _lockDuration) public {
+    self.lockDuration =  _lockDuration;
+  }
+}
+
 // Base: https://github.com/Ubeswap/ubeswap-farming/blob/master/contracts/synthetix/contracts/StakingRewards.sol
 contract VotableStakingRewards is
   IStakingRewards,
@@ -31,12 +103,7 @@ contract VotableStakingRewards is
   uint256 public rewardsDuration = 7 days;
   uint256 public lastUpdateTime;
   uint256 public rewardPerTokenStored;
-
-  uint256 public lockDuration;
-  uint256 public lockTime;
-  mapping(address => uint256) public userLocked;
-  mapping(address => mapping(uint256 => uint256)) public userWeights;
-  mapping(uint256 => uint256) public poolWeights;
+  GaugeData public gaugeData;
 
   IRomulusDelegate public immutable romulusDelegate;
   IPoolManager public poolManager;
@@ -61,23 +128,34 @@ contract VotableStakingRewards is
     stakingToken = IERC20(_stakingToken);
     rewardsDistribution = _rewardsDistribution;
     romulusDelegate = _romulusDelegate;
-    lockDuration = _lockDuration;
+    gaugeData.lockDuration = _lockDuration;
   }
 
   /* ========== VIEWS ========== */
 
+  /// @notice Returns the total amount of tokens staked into the contract
   function totalSupply() external view override returns (uint256) {
     return _totalSupply;
   }
 
+  /**
+   * @notice Returns the total amount of tokens a user has staked
+   * @param account The address of the account to check balance of
+   */
   function balanceOf(address account) external view override returns (uint256) {
     return _balances[account];
   }
 
+  /// @notice Returns the remaining time that the reward rate is available
   function lastTimeRewardApplicable() public view override returns (uint256) {
-    return Math.min(block.timestamp, periodFinish);
+    if (block.timestamp < periodFinish) {
+      return block.timestamp;
+    } else {
+      return periodFinish;
+    }
   }
 
+  /// @notice Returns projected amount of rewards to be gained over time per token
   function rewardPerToken() public view override returns (uint256) {
     if (_totalSupply == 0) {
       return rewardPerTokenStored;
@@ -92,6 +170,7 @@ contract VotableStakingRewards is
       );
   }
 
+  /// @notice Returns the total amount of rewards 'account' has earned in rewards
   function earned(address account) public view override returns (uint256) {
     return
       _balances[account]
@@ -100,16 +179,17 @@ contract VotableStakingRewards is
         .add(rewards[account]);
   }
 
+  /// @notice Returns amount of rewards available in the current period
   function getRewardForDuration() external view override returns (uint256) {
     return rewardRate.mul(rewardsDuration);
   }
 
-  function isLocked() external view returns (bool) {
-    return block.timestamp < lockTime + lockDuration;
-  }
-
   /* ========== MUTATIVE FUNCTIONS ========== */
 
+  /**
+   * @notice Stakes tokens into contract from 'msg.sender'
+   * @param amount The amount of tokens to stake
+   */
   function stake(uint256 amount)
     external
     override
@@ -117,13 +197,11 @@ contract VotableStakingRewards is
     updateReward(msg.sender)
   {
     require(amount > 0, "Cannot stake 0");
-    _totalSupply = _totalSupply.add(amount);
+    _totalSupply = _totalSupply.add(amount); //do this at the end? to make sure everything proceeds correctly
     _balances[msg.sender] = _balances[msg.sender].add(amount);
 
     if (address(voters[msg.sender]) == address(0)) {
       voters[msg.sender] = new Voter(
-        address(this), // controller
-        msg.sender, // user
         IVotingDelegates(address(stakingToken)),
         romulusDelegate
       );
@@ -134,6 +212,10 @@ contract VotableStakingRewards is
     emit Staked(msg.sender, amount);
   }
 
+  /**
+   * @notice Withdraws staked tokens to 'msg.sender'
+   * @param amount The amount to withdraw
+   */
   function withdraw(uint256 amount)
     public
     override
@@ -142,7 +224,7 @@ contract VotableStakingRewards is
     hasVoter()
   {
     require(amount > 0, "Cannot withdraw 0");
-    uint256 withdrawable = this.balanceOf(msg.sender).sub(userLocked[msg.sender]);
+    uint256 withdrawable = this.balanceOf(msg.sender) - gaugeData.userLocked[msg.sender];
     require(amount <= withdrawable, "Withdrawing more than available");
     _totalSupply = _totalSupply.sub(amount);
     _balances[msg.sender] = _balances[msg.sender].sub(amount);
@@ -151,6 +233,7 @@ contract VotableStakingRewards is
     emit Withdrawn(msg.sender, amount);
   }
 
+  /// @notice Claims rewards of 'msg.sender'
   function getReward() public override nonReentrant updateReward(msg.sender) {
     uint256 reward = rewards[msg.sender];
     if (reward > 0) {
@@ -160,29 +243,10 @@ contract VotableStakingRewards is
     }
   }
 
+  /// @notice Withdraws all staked tokens and claims any pending rewards
   function exit() external override {
     withdraw(_balances[msg.sender]);
     getReward();
-  }
-
-  function allocatePoolWeight(uint256 poolId, uint256 amount) external {
-    require(
-      amount.add(userLocked[msg.sender]) <= this.balanceOf(msg.sender),
-      "Allocating too much"
-    );
-
-    userLocked[msg.sender] = userLocked[msg.sender].add(amount);
-    userWeights[msg.sender][poolId] = userWeights[msg.sender][poolId].add(amount);
-    poolWeights[poolId] = poolWeights[poolId].add(amount);
-  }
-
-  function removePoolWeight(uint256 poolId, uint256 amount) external {
-    require(!this.isLocked(), "Period locked");
-    require(userWeights[msg.sender][poolId] >= amount, "Removing too much");
-
-    userLocked[msg.sender] = userLocked[msg.sender].sub(amount);
-    userWeights[msg.sender][poolId] = userWeights[msg.sender][poolId].sub(amount);
-    poolWeights[poolId] = poolWeights[poolId].sub(amount);
   }
 
   /* ========== RESTRICTED FUNCTIONS ========== */
@@ -235,23 +299,38 @@ contract VotableStakingRewards is
     emit RewardsDurationUpdated(rewardsDuration);
   }
 
-  function syncWeights(uint256 start, uint256 end) external onlyOwner {
-    uint256 poolsCount = poolManager.poolsCount();
-    if (end > poolsCount) {
-      end = poolsCount;
-    }
-    for (uint256 i = start; i < end; i++) {
-      poolManager.setWeight(poolManager.poolsByIndex(i), poolWeights[i]);
-    }
+  /// @notice Creates a proposal from the voter of 'msg.sender'
+  function propose(
+    address[] memory targets,
+    uint256[] memory values,
+    string[] memory signatures,
+    bytes[] memory calldatas,
+    string memory description
+    ) external hasVoter() {
+    voters[msg.sender].propose(
+      targets,
+      values,
+      signatures,
+      calldatas,
+      description
+    );
   }
 
-  function lock() external onlyOwner {
-    require(!this.isLocked(), "Already locked");
-    lockTime = block.timestamp;
+  /**
+  * @notice Casts vote for/against/abstain proposal using voter of 'msg.sender'
+  * @param proposalId id of the proposal to vote for/against/abstain
+  * @param support - If 0, vote against - If 1, vote for - If 2, abstain
+  */
+  function castVote(uint256 proposalId, uint8 support) external hasVoter() {
+    voters[msg.sender].castVote(proposalId, support);
   }
 
-  function setLockDuration(uint256 _lockDuration) external onlyOwner {
-    lockDuration =  _lockDuration;
+  /**
+  * @notice Delegate votes from voter of `msg.sender` to `delegatee`
+  * @param delegatee The address to delegate votes to
+  */
+  function delegate(address delegatee) external hasVoter() {
+    voters[msg.sender].delegate(delegatee);
   }
 
   /* ========== MODIFIERS ========== */
