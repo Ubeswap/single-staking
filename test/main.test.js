@@ -17,7 +17,6 @@ contract("VotableStakingRewards", (accounts) => {
 
   before(async () => {
     [sender, a1, proposer, v1, v2, v3, v4, a2, a3, a4, a5, a6] = accounts;
-    console.log(accounts)
     values = ["0"];
     signatures = ["getBalanceOf(address)"];
     token = await MockVotingToken.new();
@@ -28,13 +27,14 @@ contract("VotableStakingRewards", (accounts) => {
       sender,
       token.address,
       token.address,
-      romulus.address
+      romulus.address,
+      sender, // TODO: MockPoolManager
+      60 * 60 * 24 * 6, // 6 days
     );
   });
 
   describe("#constructor/stake", () => {
     it("should work", async () => {
-    
       await token.transferFrom(sender, v1, amount)
       await token.transferFrom(sender, v2, amount)
 
@@ -50,10 +50,8 @@ contract("VotableStakingRewards", (accounts) => {
       voter0 = await Voter.at(await stakingRewards.voters(sender));
       voter1 = await Voter.at(await stakingRewards.voters(v1));
       voter2 = await Voter.at(await stakingRewards.voters(v2));
-      
 
       const balanceAfterV0 = await token.balanceOf(sender);
-      console.log(`v0 balance: ${balanceAfterV0} \n`)
 
       balanceBefore.sub(balanceAfterV0).should.be.eq.BN(amount);
       (await stakingRewards.balanceOf(sender)).should.be.eq.BN(amount);
@@ -89,7 +87,7 @@ contract("VotableStakingRewards", (accounts) => {
   //     const abstainBeforeV2 = await romulus.proposalAbstainVotes(proposalIdV2);
   //     const forBeforeV2 = await romulus.proposalForVotes(proposalIdV2);
   //     const againstBeforeV2 = await romulus.proposalAgainstVotes(proposalIdV2);
-      
+
   //     await stakingRewards.castVote(proposalIdV0, 0);
   //     await stakingRewards.castVote(proposalIdV1, 1);
   //     await stakingRewards.castVote(proposalIdV2, 2);
@@ -141,48 +139,43 @@ contract("VotableStakingRewards", (accounts) => {
   //   });
   // });
 
-  describe("#lock", () => {
-    it("should work", async () => {
+  describe("weights and locking", () => {
+    it ("setLockDuration() should work", async () => {
+      await stakingRewards.setLockDuration(100);
+      (await stakingRewards.lockDuration()).should.be.eq.BN(100);
+    });
+
+    it("allocatePoolWeight() should work", async () => {
+      await stakingRewards.allocatePoolWeight(1, 1);
+      await stakingRewards.allocatePoolWeight(1, 2, {from: v1});
+      await stakingRewards.allocatePoolWeight(1, 3, {from: v2});
+
+      (await stakingRewards.userWeights(sender, 1)).should.be.eq.BN(1);
+      (await stakingRewards.userLocked(sender)).should.be.eq.BN(1);
+
+      (await stakingRewards.userWeights(v1, 1)).should.be.eq.BN(2);
+      (await stakingRewards.userLocked(v1)).should.be.eq.BN(2);
+
+      (await stakingRewards.userWeights(v2, 1)).should.be.eq.BN(3);
+      (await stakingRewards.userLocked(v2)).should.be.eq.BN(3);
+
+      (await stakingRewards.poolWeights(1)).should.be.eq.BN(6);
+    });
+
+    it("removePoolWeight() should work", async () => {
+      await stakingRewards.removePoolWeight(1, 1, {from: v2});
+      (await stakingRewards.userWeights(v2, 1)).should.be.eq.BN(2);
+      (await stakingRewards.userLocked(v2)).should.be.eq.BN(2);
+      (await stakingRewards.poolWeights(1)).should.be.eq.BN(5);
+    });
+
+    it("lock() should work", async () => {
       await stakingRewards.lock();
-      assert.equal(await stakingRewards.isLocked(), true);
-      
-      
+      (await stakingRewards.isLocked()).should.be.true;
     });
-  });
 
-  describe("#allocate_pool_weight", () => {
-    it("should work", async () => {
-
-      await stakingRewards.allocate_pool_weight(1, 100);
-      await stakingRewards.allocate_pool_weight(1, 100, {from: v1});
-      await stakingRewards.allocate_pool_weight(1, 100, {from: v2});
-      const poolWeight = await stakingRewards.getPoolWeight(1);
-      poolWeight.should.be.eq.BN(300);
+    it("removePoolWeight() should not work while locked", async () => {
+      await stakingRewards.removePoolWeight(1, 100).should.be.revertedWith("Weights are locked");
     });
-  });
-
-  describe("#set_lock duration", () => {
-    it ("should work", async () => {
-      await stakingRewards.setLockDuration(0);
-      assert(await stakingRewards.isLocked() == false);
-    });
-  });
-
-  describe("#remove_pool_weight", () => {
-    it("should work", async () => {
-      //await stakingRewards.allocate_pool_weight(1, 100);
-      await stakingRewards.remove_pool_weight(1, 100);
-      await stakingRewards.remove_pool_weight(1, 100, {from: v1});
-      await stakingRewards.remove_pool_weight(1, 100, {from: v2});
-      const poolWeight = await stakingRewards.getPoolWeight(1);
-      poolWeight.should.be.eq.BN(0);
-
-      try {
-        await stakingRewards.remove_pool_weight(1, 100, {from: v2});
-        assert.fail("The transaction should have thrown an error");
-      }catch (err) {
-          assert.include(err.message, "revert", "The error message should contain 'revert'");
-      }
-    });
-  });
+  })
 });

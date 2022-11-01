@@ -55,12 +55,14 @@ contract VotableStakingRewards is
     address _rewardsToken,
     address _stakingToken,
     IRomulusDelegate _romulusDelegate,
+    IPoolManager _poolManager,
     uint256 _lockDuration
   ) Owned(_owner) {
     rewardsToken = IERC20(_rewardsToken);
     stakingToken = IERC20(_stakingToken);
     rewardsDistribution = _rewardsDistribution;
     romulusDelegate = _romulusDelegate;
+    poolManager = _poolManager;
     lockDuration = _lockDuration;
   }
 
@@ -139,8 +141,8 @@ contract VotableStakingRewards is
     override
     nonReentrant
     updateReward(msg.sender)
-    hasVoter()
   {
+    require(address(voters[msg.sender]) != address(0));
     require(amount > 0, "Cannot withdraw 0");
     uint256 withdrawable = this.balanceOf(msg.sender).sub(userLocked[msg.sender]);
     require(amount <= withdrawable, "Withdrawing more than available");
@@ -176,8 +178,7 @@ contract VotableStakingRewards is
     poolWeights[poolId] = poolWeights[poolId].add(amount);
   }
 
-  function removePoolWeight(uint256 poolId, uint256 amount) external {
-    require(!this.isLocked(), "Period locked");
+  function removePoolWeight(uint256 poolId, uint256 amount) external isUnlocked {
     require(userWeights[msg.sender][poolId] >= amount, "Removing too much");
 
     userLocked[msg.sender] = userLocked[msg.sender].sub(amount);
@@ -230,7 +231,10 @@ contract VotableStakingRewards is
   }
 
   function setRewardsDuration(uint256 _rewardsDuration) external onlyOwner {
-    require(block.timestamp > periodFinish, "Previous rewards still in progress");
+    require(
+      block.timestamp > periodFinish,
+      "Rewards period must be end before changing the rewardsDuration"
+    );
     rewardsDuration = _rewardsDuration;
     emit RewardsDurationUpdated(rewardsDuration);
   }
@@ -245,12 +249,13 @@ contract VotableStakingRewards is
     }
   }
 
-  function lock() external onlyOwner {
-    require(!this.isLocked(), "Already locked");
+  function lock() external onlyOwner isUnlocked {
+    emit Locked(block.timestamp, block.timestamp + lockDuration);
     lockTime = block.timestamp;
   }
 
-  function setLockDuration(uint256 _lockDuration) external onlyOwner {
+  function setLockDuration(uint256 _lockDuration) external onlyOwner isUnlocked {
+    emit LockDurationChanged(lockDuration, _lockDuration);
     lockDuration =  _lockDuration;
   }
 
@@ -266,8 +271,8 @@ contract VotableStakingRewards is
     _;
   }
 
-  modifier hasVoter() {
-    require(address(voters[msg.sender]) != address(0));
+  modifier isUnlocked() {
+    require(!this.isLocked(), "Weights are locked");
     _;
   }
 
@@ -279,5 +284,6 @@ contract VotableStakingRewards is
   event RewardPaid(address indexed user, uint256 reward);
   event RewardsDurationUpdated(uint256 newDuration);
   event Recovered(address token, uint256 amount);
-  event DelegateIdxChanged(uint8 previousDelegateIdx, uint8 nextDelegateIdx);
+  event Locked(uint256 lockTime, uint256 lockEndTime);
+  event LockDurationChanged(uint256 prevLockDuration, uint256 nextLockDuration);
 }
