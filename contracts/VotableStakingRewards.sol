@@ -142,7 +142,7 @@ contract VotableStakingRewards is
     nonReentrant
     updateReward(msg.sender)
   {
-    require(address(voters[msg.sender]) != address(0));
+    require(address(voters[msg.sender]) != address(0), "Caller has no voter");
     require(amount > 0, "Cannot withdraw 0");
     uint256 withdrawable = this.balanceOf(msg.sender).sub(userLocked[msg.sender]);
     require(amount <= withdrawable, "Withdrawing more than available");
