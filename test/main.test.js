@@ -1,5 +1,3 @@
-const { assert } = require("chai");
-
 /* global artifacts, web3, contract */
 require("chai")
   .use(require("bn-chai")(web3.utils.BN))
@@ -10,6 +8,24 @@ const VotableStakingRewards = artifacts.require("VotableStakingRewards");
 const MockRomulus = artifacts.require("MockRomulus");
 const MockVotingToken = artifacts.require("MockVotingToken");
 const Voter = artifacts.require("Voter");
+
+rpc = ({ method, params }) => {
+  return new Promise((resolve, reject) => {
+    web3.currentProvider.send(
+      {
+        jsonrpc: "2.0",
+        method,
+        params,
+      },
+      (err, result) => {
+        if (err) {
+          return reject(err);
+        }
+        return resolve(result.result);
+      }
+    );
+  });
+};
 
 contract("VotableStakingRewards", (accounts) => {
   const amount = 100;
@@ -148,7 +164,7 @@ contract("VotableStakingRewards", (accounts) => {
     it("does not let non-owner update lockDuration", async () => {
       await stakingRewards
         .setLockDuration(100, { from: v1 })
-        .should.be.revertedWith(
+        .should.be.rejectedWith(
           "Only the contract owner may perform this action"
         );
     });
@@ -180,31 +196,38 @@ contract("VotableStakingRewards", (accounts) => {
     it("does not let non-owner lock", async () => {
       await stakingRewards
         .lock({ from: v1 })
-        .should.be.revertedWith(
+        .should.be.rejectedWith(
           "Only the contract owner may perform this action"
         );
       (await stakingRewards.isLocked()).should.be.false;
     });
 
     it("lets the owner lock", async () => {
+      (await stakingRewards.isLocked()).should.be.false;
       await stakingRewards.lock();
       (await stakingRewards.isLocked()).should.be.true;
     });
 
     it("does not allow double locking", async () => {
-      await stakingRewards.lock().should.be.revertedWith("Weights are locked");
+      await stakingRewards.lock().should.be.rejectedWith("Weights are locked");
+    });
+
+    it("does not allow updating lockDuration", async () => {
+      await stakingRewards
+        .setLockDuration(1)
+        .should.be.rejectedWith("Weights are locked");
     });
 
     it("does not allow removing pool weights while locked", async () => {
       await stakingRewards
         .removePoolWeight(1, 1)
-        .should.be.revertedWith("Weights are locked");
+        .should.be.rejectedWith("Weights are locked");
     });
 
     it("only allows withdrawals for unlocked balance", async () => {
       await stakingRewards
         .withdraw(100)
-        .should.be.revertedWith("Withdrawing more than available");
+        .should.be.rejectedWith("Withdrawing more than available");
 
       const stakingBalanceBefore = await stakingRewards.balanceOf(sender);
       const tokenBalanceBefore = await token.balanceOf(sender);
@@ -213,6 +236,12 @@ contract("VotableStakingRewards", (accounts) => {
       const tokenBalanceAfter = await token.balanceOf(sender);
       stakingBalanceBefore.sub(stakingBalanceAfter).should.be.eq.BN(99);
       tokenBalanceAfter.sub(tokenBalanceBefore).should.be.eq.BN(99);
+    });
+
+    it("unlocks after 100 seconds", async () => {
+      await rpc({ method: "evm_increaseTime", params: [100] });
+      await rpc({ method: "evm_mine" });
+      (await stakingRewards.isLocked()).should.be.false;
     });
   });
 });
