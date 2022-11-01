@@ -55,6 +55,7 @@ contract("VotableStakingRewards", (accounts) => {
       poolManager.address,
       60 * 60 * 24 * 6 // 6 days
     );
+    await poolManager.transferOwnership(stakingRewards.address);
   });
 
   describe("#constructor/stake", () => {
@@ -175,30 +176,6 @@ contract("VotableStakingRewards", (accounts) => {
     });
   });
 
-  // describe("#exit", () => {
-  //   it("should work", async () => {
-  //     const balanceBefore = await token.balanceOf(sender);
-  //     await stakingRewards.exit({from: sender});
-  //     await stakingRewards.exit({from: v1});
-  //     await stakingRewards.exit({from: v2});
-
-  //     const balanceAfter = await token.balanceOf(sender);
-  //     balanceAfter.sub(balanceBefore).should.be.eq.BN(amount);
-  //     (await stakingRewards.balanceOf(sender)).should.be.eq.BN(0);
-
-  //     // Staking rewards doesn't have any tokens
-  //     (await token.balanceOf(stakingRewards.address)).should.be.eq.BN(0);
-
-  //     // All voters should have no tokens
-  //     (await token.balanceOf(voter0.address)).should.be.eq.BN(0);
-  //     (await token.getCurrentVotes(voter0.address)).should.be.eq.BN(0);
-  //     (await token.balanceOf(voter1.address)).should.be.eq.BN(0);
-  //     (await token.getCurrentVotes(voter1.address)).should.be.eq.BN(0);
-  //     (await token.balanceOf(voter2.address)).should.be.eq.BN(0);
-  //     (await token.getCurrentVotes(voter2.address)).should.be.eq.BN(0);
-  //   });
-  // });
-
   describe("weights and locking", () => {
     it("lets owner update lockDuration", async () => {
       await stakingRewards.setLockDuration(100);
@@ -237,22 +214,6 @@ contract("VotableStakingRewards", (accounts) => {
       (await stakingRewards.poolWeights(1)).should.be.eq.BN(5);
     });
 
-    it("does not let non-owner syncWeights", async () => {
-      await stakingRewards
-        .syncWeights(0, 2, { from: v1 })
-        .should.be.rejectedWith(
-          "Only the contract owner may perform this action"
-        );
-    });
-
-    it("lets owner sync weights", async () => {
-      (await poolManager.weights(0)).should.be.eq.BN(0);
-      (await poolManager.weights(1)).should.be.eq.BN(0);
-      await stakingRewards.syncWeights(0, 2);
-      (await poolManager.weights(0)).should.be.eq.BN(0);
-      (await poolManager.weights(1)).should.be.eq.BN(5);
-    });
-
     it("does not let non-owner lock", async () => {
       await stakingRewards
         .lock({ from: v1 })
@@ -278,6 +239,22 @@ contract("VotableStakingRewards", (accounts) => {
         .should.be.rejectedWith("Weights are locked");
     });
 
+    it("does not let non-owner syncWeights", async () => {
+      await stakingRewards
+        .syncWeights(0, 2, { from: v1 })
+        .should.be.rejectedWith(
+          "Only the contract owner may perform this action"
+        );
+    });
+
+    it("lets owner sync weights", async () => {
+      (await poolManager.weights(0)).should.be.eq.BN(0);
+      (await poolManager.weights(1)).should.be.eq.BN(0);
+      await stakingRewards.syncWeights(0, 2);
+      (await poolManager.weights(0)).should.be.eq.BN(0);
+      (await poolManager.weights(1)).should.be.eq.BN(5);
+    });
+
     it("does not allow removing pool weights while locked", async () => {
       await stakingRewards
         .removePoolWeight(1, 1)
@@ -291,11 +268,34 @@ contract("VotableStakingRewards", (accounts) => {
 
       const stakingBalanceBefore = await stakingRewards.balanceOf(sender);
       const tokenBalanceBefore = await token.balanceOf(sender);
-      await stakingRewards.withdraw(99);
+      await stakingRewards.withdraw(3);
       const stakingBalanceAfter = await stakingRewards.balanceOf(sender);
       const tokenBalanceAfter = await token.balanceOf(sender);
-      stakingBalanceBefore.sub(stakingBalanceAfter).should.be.eq.BN(99);
-      tokenBalanceAfter.sub(tokenBalanceBefore).should.be.eq.BN(99);
+      stakingBalanceBefore.sub(stakingBalanceAfter).should.be.eq.BN(3);
+      tokenBalanceAfter.sub(tokenBalanceBefore).should.be.eq.BN(3);
+    });
+
+    it("exits with the withdrawable balance", async () => {
+      const stakingBalanceBefore = await stakingRewards.balanceOf(sender);
+      const tokenBalanceBefore = await token.balanceOf(sender);
+      await stakingRewards.exit();
+      const stakingBalanceAfter = await stakingRewards.balanceOf(sender);
+      const tokenBalanceAfter = await token.balanceOf(sender);
+      stakingBalanceBefore.sub(stakingBalanceAfter).should.be.eq.BN(96);
+      tokenBalanceAfter.sub(tokenBalanceBefore).should.be.eq.BN(96);
+    });
+
+    it("does not allow non-owner to transfer PoolManager ownership", async () => {
+      await stakingRewards
+        .transferPoolManagerOwnership(sender, { from: v1 })
+        .should.be.rejectedWith(
+          "Only the contract owner may perform this action"
+        );
+    });
+
+    it("allows owner to transfer PoolManager ownership", async () => {
+      await stakingRewards.transferPoolManagerOwnership(sender);
+      expect(await poolManager.owner()).to.eq(sender);
     });
 
     it("unlocks after 100 seconds", async () => {

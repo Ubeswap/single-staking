@@ -39,10 +39,6 @@ contract Voter {
     _votingToken.delegate(address(this));
   }
 
-  /**
-   * @notice Transfers voting tokens from this out of this Voter. Only callable by the controller
-   * @param amount The amount of voting tokens to transfer out.
-   */
   function removeVotes(address to, uint256 amount) external onlyController {
     IERC20(address(votingToken)).safeTransfer(to, amount);
   }
@@ -50,13 +46,13 @@ contract Voter {
   /**
    * @notice Casts vote for/against/abstain a Proposal
    * @param proposalId id of the proposal to vote for/against/abstain
-   * @param support - If 0, vote against - If 1, vote for - If 2, abstain
+   * @param support AGAINST=0 ; 1=FOR ; 2=ABSTAIN
    */
   function castVote(uint256 proposalId, uint8 support) external onlyUser {
     romulusDelegate.castVote(proposalId, support);
   }
 
-  /// @notice Creates a proposal from this Voter
+  /// @notice Creates a proposal from this Voter. Only callable by the Voter's user.
   function propose(
     address[] memory targets,
     uint256[] memory values,
@@ -74,7 +70,7 @@ contract Voter {
   }
 
   /**
-   * @notice Delegate votes of Voter to `delegatee`
+   * @notice Delegate votes of Voter to `delegatee`. Only callable by the Voter's user.
    * @param delegatee The address to delegate votes to
    */
   function delegate(address delegatee) external onlyUser {

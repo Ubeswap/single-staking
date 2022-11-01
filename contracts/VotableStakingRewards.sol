@@ -145,7 +145,7 @@ contract VotableStakingRewards is
   {
     require(address(voters[msg.sender]) != address(0), "Caller has no voter");
     require(amount > 0, "Cannot withdraw 0");
-    uint256 withdrawable = this.balanceOf(msg.sender).sub(userLocked[msg.sender]);
+    uint256 withdrawable = _balances[msg.sender].sub(userLocked[msg.sender]);
     require(amount <= withdrawable, "Withdrawing more than available");
     _totalSupply = _totalSupply.sub(amount);
     _balances[msg.sender] = _balances[msg.sender].sub(amount);
@@ -164,13 +164,13 @@ contract VotableStakingRewards is
   }
 
   function exit() external override {
-    withdraw(_balances[msg.sender]);
+    withdraw(_balances[msg.sender].sub(userLocked[msg.sender]));
     getReward();
   }
 
   function allocatePoolWeight(uint256 poolId, uint256 amount) external {
     require(
-      amount.add(userLocked[msg.sender]) <= this.balanceOf(msg.sender),
+      amount.add(userLocked[msg.sender]) <= _balances[msg.sender],
       "Allocating too much"
     );
 
@@ -218,6 +218,35 @@ contract VotableStakingRewards is
     emit RewardAdded(reward);
   }
 
+  function setRewardsDuration(uint256 _rewardsDuration) external onlyOwner {
+    require(
+      block.timestamp > periodFinish,
+      "Rewards period must be end before changing the rewardsDuration"
+    );
+    rewardsDuration = _rewardsDuration;
+    emit RewardsDurationUpdated(rewardsDuration);
+  }
+
+  function lock() external onlyOwner isUnlocked {
+    emit Locked(block.timestamp, block.timestamp + lockDuration);
+    lockTime = block.timestamp;
+  }
+
+  function syncWeights(uint256 start, uint256 end) external onlyOwner {
+    uint256 poolsCount = poolManager.poolsCount();
+    if (end > poolsCount) {
+      end = poolsCount;
+    }
+    for (uint256 i = start; i < end; i++) {
+      poolManager.setWeight(poolManager.poolsByIndex(i), poolWeights[i]);
+    }
+  }
+
+  function setLockDuration(uint256 _lockDuration) external onlyOwner isUnlocked {
+    emit LockDurationChanged(lockDuration, _lockDuration);
+    lockDuration =  _lockDuration;
+  }
+
   // Added to support recovering LP Rewards from other systems such as BAL to be distributed to holders
   function recoverERC20(address tokenAddress, uint256 tokenAmount)
     external
@@ -231,33 +260,8 @@ contract VotableStakingRewards is
     emit Recovered(tokenAddress, tokenAmount);
   }
 
-  function setRewardsDuration(uint256 _rewardsDuration) external onlyOwner {
-    require(
-      block.timestamp > periodFinish,
-      "Rewards period must be end before changing the rewardsDuration"
-    );
-    rewardsDuration = _rewardsDuration;
-    emit RewardsDurationUpdated(rewardsDuration);
-  }
-
-  function syncWeights(uint256 start, uint256 end) external onlyOwner {
-    uint256 poolsCount = poolManager.poolsCount();
-    if (end > poolsCount) {
-      end = poolsCount;
-    }
-    for (uint256 i = start; i < end; i++) {
-      poolManager.setWeight(poolManager.poolsByIndex(i), poolWeights[i]);
-    }
-  }
-
-  function lock() external onlyOwner isUnlocked {
-    emit Locked(block.timestamp, block.timestamp + lockDuration);
-    lockTime = block.timestamp;
-  }
-
-  function setLockDuration(uint256 _lockDuration) external onlyOwner isUnlocked {
-    emit LockDurationChanged(lockDuration, _lockDuration);
-    lockDuration =  _lockDuration;
+  function transferPoolManagerOwnership(address to) external onlyOwner {
+    poolManager.transferOwnership(to);
   }
 
   /* ========== MODIFIERS ========== */

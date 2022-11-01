@@ -13,13 +13,13 @@ contract MockPoolManager is IPoolManager {
 
   constructor() {}
 
-  function addPool(address _stakingToken) external {
+  function addPool(address _stakingToken) external onlyOwner {
     poolToIndex[_stakingToken] = poolsCount;
     poolsByIndex[poolsCount] = _stakingToken;
     poolsCount++;
   }
 
-  function setWeight(address _stakingToken, uint256 _weight) external override {
+  function setWeight(address _stakingToken, uint256 _weight) external onlyOwner override {
     uint256 index = poolToIndex[_stakingToken];
     require(poolsByIndex[index] == _stakingToken, "Pool not found");
     weights[index] = _weight;
