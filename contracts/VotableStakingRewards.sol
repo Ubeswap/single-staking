@@ -107,10 +107,6 @@ contract VotableStakingRewards is
     return rewardRate.mul(rewardsDuration);
   }
 
-  function isLocked() external view returns (bool) {
-    return block.timestamp < lockTime + lockDuration;
-  }
-
   /* ========== MUTATIVE FUNCTIONS ========== */
 
   function stake(uint256 amount)
@@ -122,7 +118,6 @@ contract VotableStakingRewards is
     require(amount > 0, "Cannot stake 0");
     _totalSupply = _totalSupply.add(amount);
     _balances[msg.sender] = _balances[msg.sender].add(amount);
-
     if (address(voters[msg.sender]) == address(0)) {
       voters[msg.sender] = new Voter(
         address(this), // controller
@@ -131,7 +126,6 @@ contract VotableStakingRewards is
         romulusDelegate
       );
     }
-
     Voter v = voters[msg.sender];
     stakingToken.safeTransferFrom(msg.sender, address(v), amount);
     emit Staked(msg.sender, amount);
@@ -277,7 +271,7 @@ contract VotableStakingRewards is
   }
 
   modifier isUnlocked() {
-    require(!this.isLocked(), "Weights are locked");
+    require(block.timestamp >= lockTime.add(lockDuration), "Weights are locked");
     _;
   }
 

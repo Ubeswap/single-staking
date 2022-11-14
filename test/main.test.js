@@ -36,7 +36,7 @@ contract("VotableStakingRewards", (accounts) => {
   let token, stakingRewards, poolManager, voter0, voter1, voter2;
 
   before(async () => {
-    [sender, a1, proposer, v1, v2, v3, v4, stakingToken1, stakingToken2] =
+    [sender, a1, proposer, user1, user2, pool1Addr, pool2Addr] =
       accounts;
     values = ["0"];
     signatures = ["getBalanceOf(address)"];
@@ -44,8 +44,8 @@ contract("VotableStakingRewards", (accounts) => {
     romulus = await MockRomulus.new(token.address);
 
     poolManager = await MockPoolManager.new();
-    await poolManager.addPool(stakingToken1);
-    await poolManager.addPool(stakingToken2);
+    await poolManager.addPool(pool1Addr);
+    await poolManager.addPool(pool2Addr);
     stakingRewards = await VotableStakingRewards.new(
       sender,
       sender,
@@ -60,12 +60,12 @@ contract("VotableStakingRewards", (accounts) => {
 
   describe("#constructor/stake", () => {
     it("should work", async () => {
-      await token.transferFrom(sender, v1, 50);
-      await token.transferFrom(sender, v2, 25);
+      await token.transferFrom(sender, user1, 50);
+      await token.transferFrom(sender, user2, 25);
 
       await token.approve(stakingRewards.address, 100);
-      await token.approve(stakingRewards.address, 50, { from: v1 });
-      await token.approve(stakingRewards.address, 25, { from: v2 });
+      await token.approve(stakingRewards.address, 50, { from: user1 });
+      await token.approve(stakingRewards.address, 25, { from: user2 });
 
       const balanceBefore = await token.balanceOf(sender);
       await stakingRewards.stake(100);
@@ -78,15 +78,19 @@ contract("VotableStakingRewards", (accounts) => {
       (await token.balanceOf(voter0.address)).should.be.eq.BN(100);
       (await token.getCurrentVotes(voter0.address)).should.be.eq.BN(100);
 
-      await stakingRewards.stake(50, { from: v1 });
-      voter1 = await Voter.at(await stakingRewards.voters(v1));
+      await stakingRewards.stake(50, { from: user1 });
+      voter1 = await Voter.at(await stakingRewards.voters(user1));
       (await voter1.controller()).should.be.equal(stakingRewards.address);
-      (await voter1.user()).should.be.equal(v1);
+      (await voter1.user()).should.be.equal(user1);
+      (await token.balanceOf(voter1.address)).should.be.eq.BN(50);
+      (await token.getCurrentVotes(voter1.address)).should.be.eq.BN(50);
 
-      await stakingRewards.stake(25, { from: v2 });
-      voter2 = await Voter.at(await stakingRewards.voters(v2));
+      await stakingRewards.stake(25, { from: user2 });
+      voter2 = await Voter.at(await stakingRewards.voters(user2));
       (await voter2.controller()).should.be.equal(stakingRewards.address);
-      (await voter2.user()).should.be.equal(v2);
+      (await voter2.user()).should.be.equal(user2);
+      (await token.balanceOf(voter2.address)).should.be.eq.BN(25);
+      (await token.getCurrentVotes(voter2.address)).should.be.eq.BN(25);
 
       (await token.balanceOf(stakingRewards.address)).should.be.eq.BN(0);
     });
@@ -101,7 +105,7 @@ contract("VotableStakingRewards", (accounts) => {
 
     it("does not let non-user delegate", async () => {
       await voter0
-        .delegate(v2, { from: v2 })
+        .delegate(user2, { from: user2 })
         .should.be.rejectedWith("Voter: only user");
     });
 
@@ -120,7 +124,7 @@ contract("VotableStakingRewards", (accounts) => {
         signatures,
         [],
         "do nothing",
-        { from: v1 }
+        { from: user1 }
       );
       await voter2.propose(
         [token.address],
@@ -128,7 +132,7 @@ contract("VotableStakingRewards", (accounts) => {
         signatures,
         [],
         "do nothing",
-        { from: v2 }
+        { from: user2 }
       );
       (await romulus.proposalsMade()).should.be.eq.BN(3);
     });
@@ -136,7 +140,7 @@ contract("VotableStakingRewards", (accounts) => {
     it("does not let non-user propose", async () => {
       await voter0
         .propose([token.address], values, signatures, [], "do nothing", {
-          from: v1,
+          from: user1,
         })
         .should.be.rejectedWith("Voter: only user");
     });
@@ -149,8 +153,8 @@ contract("VotableStakingRewards", (accounts) => {
       const againstBefore = await romulus.proposalAgainstVotes(proposal0);
 
       await voter0.castVote(proposal0, AGAINST);
-      await voter1.castVote(proposal0, FOR, { from: v1 });
-      await voter2.castVote(proposal0, ABSTAIN, { from: v2 });
+      await voter1.castVote(proposal0, FOR, { from: user1 });
+      await voter2.castVote(proposal0, ABSTAIN, { from: user2 });
 
       const abstainAfter = await romulus.proposalAbstainVotes(proposal0);
       const forAfter = await romulus.proposalForVotes(proposal0);
@@ -164,7 +168,7 @@ contract("VotableStakingRewards", (accounts) => {
     it("does not let non-user vote", async () => {
       await voter0
         .castVote(proposal0, FOR, {
-          from: v1,
+          from: user1,
         })
         .should.be.rejectedWith("Voter: only user");
     });
@@ -177,56 +181,57 @@ contract("VotableStakingRewards", (accounts) => {
   });
 
   describe("weights and locking", () => {
+    it("does not let non-owner update lockDuration", async () => {
+      await stakingRewards
+        .setLockDuration(10, { from: user1 })
+        .should.be.rejectedWith(
+          "Only the contract owner may perform this action"
+        );
+    });
+
     it("lets owner update lockDuration", async () => {
       await stakingRewards.setLockDuration(100);
       (await stakingRewards.lockDuration()).should.be.eq.BN(100);
     });
 
-    it("does not let non-owner update lockDuration", async () => {
-      await stakingRewards
-        .setLockDuration(100, { from: v1 })
-        .should.be.rejectedWith(
-          "Only the contract owner may perform this action"
-        );
-    });
-
     it("lets users allocate weights", async () => {
       await stakingRewards.allocatePoolWeight(1, 1);
-      await stakingRewards.allocatePoolWeight(1, 2, { from: v1 });
-      await stakingRewards.allocatePoolWeight(1, 3, { from: v2 });
+      await stakingRewards.allocatePoolWeight(1, 2, { from: user1 });
+      await stakingRewards.allocatePoolWeight(1, 3, { from: user2 });
 
+      (await stakingRewards.userWeights(sender, 0)).should.be.eq.BN(0);
       (await stakingRewards.userWeights(sender, 1)).should.be.eq.BN(1);
       (await stakingRewards.userLocked(sender)).should.be.eq.BN(1);
 
-      (await stakingRewards.userWeights(v1, 1)).should.be.eq.BN(2);
-      (await stakingRewards.userLocked(v1)).should.be.eq.BN(2);
+      (await stakingRewards.userWeights(user1, 0)).should.be.eq.BN(0);
+      (await stakingRewards.userWeights(user1, 1)).should.be.eq.BN(2);
+      (await stakingRewards.userLocked(user1)).should.be.eq.BN(2);
 
-      (await stakingRewards.userWeights(v2, 1)).should.be.eq.BN(3);
-      (await stakingRewards.userLocked(v2)).should.be.eq.BN(3);
+      (await stakingRewards.userWeights(user2, 0)).should.be.eq.BN(0);
+      (await stakingRewards.userWeights(user2, 1)).should.be.eq.BN(3);
+      (await stakingRewards.userLocked(user2)).should.be.eq.BN(3);
 
+      (await stakingRewards.poolWeights(0)).should.be.eq.BN(0);
       (await stakingRewards.poolWeights(1)).should.be.eq.BN(6);
     });
 
     it("lets users remove weights while unlocked", async () => {
-      await stakingRewards.removePoolWeight(1, 1, { from: v2 });
-      (await stakingRewards.userWeights(v2, 1)).should.be.eq.BN(2);
-      (await stakingRewards.userLocked(v2)).should.be.eq.BN(2);
+      await stakingRewards.removePoolWeight(1, 1, { from: user2 });
+      (await stakingRewards.userWeights(user2, 1)).should.be.eq.BN(2);
+      (await stakingRewards.userLocked(user2)).should.be.eq.BN(2);
       (await stakingRewards.poolWeights(1)).should.be.eq.BN(5);
     });
 
     it("does not let non-owner lock", async () => {
       await stakingRewards
-        .lock({ from: v1 })
+        .lock({ from: user1 })
         .should.be.rejectedWith(
           "Only the contract owner may perform this action"
         );
-      (await stakingRewards.isLocked()).should.be.false;
     });
 
     it("lets the owner lock", async () => {
-      (await stakingRewards.isLocked()).should.be.false;
       await stakingRewards.lock();
-      (await stakingRewards.isLocked()).should.be.true;
     });
 
     it("does not allow double locking", async () => {
@@ -241,7 +246,7 @@ contract("VotableStakingRewards", (accounts) => {
 
     it("does not let non-owner syncWeights", async () => {
       await stakingRewards
-        .syncWeights(0, 2, { from: v1 })
+        .syncWeights(0, 2, { from: user1 })
         .should.be.rejectedWith(
           "Only the contract owner may perform this action"
         );
@@ -287,7 +292,7 @@ contract("VotableStakingRewards", (accounts) => {
 
     it("does not allow non-owner to transfer PoolManager ownership", async () => {
       await stakingRewards
-        .transferPoolManagerOwnership(sender, { from: v1 })
+        .transferPoolManagerOwnership(sender, { from: user1 })
         .should.be.rejectedWith(
           "Only the contract owner may perform this action"
         );
@@ -301,7 +306,10 @@ contract("VotableStakingRewards", (accounts) => {
     it("unlocks after 100 seconds", async () => {
       await rpc({ method: "evm_increaseTime", params: [100] });
       await rpc({ method: "evm_mine" });
-      (await stakingRewards.isLocked()).should.be.false;
+      await stakingRewards.removePoolWeight(1, 1);
+      (await stakingRewards.userWeights(sender, 1)).should.be.eq.BN(0);
+      (await stakingRewards.userLocked(sender)).should.be.eq.BN(0);
+      await stakingRewards.exit();
     });
   });
 });
