@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
-// solhint-disable not-rely-on-time
 
-pragma solidity ^0.8.3;
+pragma solidity ^0.8.16;
 
 import "@openzeppelin/contracts/utils/math/Math.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
@@ -12,6 +11,7 @@ import "./interfaces/IRomulusDelegate.sol";
 import "./interfaces/IStakingRewards.sol";
 import "./RewardsDistributionRecipient.sol";
 import "./Voter.sol";
+import "./interfaces/IPoolManager.sol";
 
 // Base: https://github.com/Ubeswap/ubeswap-farming/blob/master/contracts/synthetix/contracts/StakingRewards.sol
 contract VotableStakingRewards is
@@ -24,6 +24,8 @@ contract VotableStakingRewards is
 
   /* ========== STATE VARIABLES ========== */
 
+  IRomulusDelegate public immutable romulusDelegate;
+
   IERC20 public rewardsToken;
   IERC20 public stakingToken;
   uint256 public periodFinish = 0;
@@ -32,18 +34,19 @@ contract VotableStakingRewards is
   uint256 public lastUpdateTime;
   uint256 public rewardPerTokenStored;
 
+  IPoolManager public poolManager;
+  uint256 public lockDuration;
+  uint256 public lockTime;
+  mapping(address => uint256) public userLocked;
+  mapping(address => mapping(uint256 => uint256)) public userWeights;
+  mapping(uint256 => uint256) public poolWeights;
+
   mapping(address => uint256) public userRewardPerTokenPaid;
   mapping(address => uint256) public rewards;
 
   uint256 private _totalSupply;
   mapping(address => uint256) private _balances;
-
-  // Voters
-  // 0 - Abstain
-  // 1 - For
-  // 2 - Against
-  Voter[3] public delegates;
-  mapping(address => uint8) public userDelegateIdx;
+  mapping(address => Voter) public voters;
 
   /* ========== CONSTRUCTOR ========== */
 
@@ -52,34 +55,19 @@ contract VotableStakingRewards is
     address _rewardsDistribution,
     address _rewardsToken,
     address _stakingToken,
-    IRomulusDelegate _romulusDelegate
+    IRomulusDelegate _romulusDelegate,
+    IPoolManager _poolManager,
+    uint256 _lockDuration
   ) Owned(_owner) {
     rewardsToken = IERC20(_rewardsToken);
     stakingToken = IERC20(_stakingToken);
     rewardsDistribution = _rewardsDistribution;
-
-    delegates[0] = new Voter(
-      2, // Abstain
-      IVotingDelegates(_stakingToken),
-      _romulusDelegate
-    );
-    delegates[1] = new Voter(
-      1, // For
-      IVotingDelegates(_stakingToken),
-      _romulusDelegate
-    );
-    delegates[2] = new Voter(
-      0, // Against
-      IVotingDelegates(_stakingToken),
-      _romulusDelegate
-    );
+    romulusDelegate = _romulusDelegate;
+    poolManager = _poolManager;
+    lockDuration = _lockDuration;
   }
 
   /* ========== VIEWS ========== */
-
-  function supportOf(address account) external view returns (uint8) {
-    return delegates[userDelegateIdx[account]].support();
-  }
 
   function totalSupply() external view override returns (uint256) {
     return _totalSupply;
@@ -130,15 +118,16 @@ contract VotableStakingRewards is
     require(amount > 0, "Cannot stake 0");
     _totalSupply = _totalSupply.add(amount);
     _balances[msg.sender] = _balances[msg.sender].add(amount);
-    stakingToken.safeTransferFrom(msg.sender, address(this), amount);
-
-    Voter v = delegates[userDelegateIdx[msg.sender]];
-    require(
-      stakingToken.approve(address(v), amount),
-      "Approve to voter failed"
-    );
-    v.addVotes(amount);
-
+    if (address(voters[msg.sender]) == address(0)) {
+      voters[msg.sender] = new Voter(
+        address(this), // controller
+        msg.sender, // user
+        IVotingDelegates(address(stakingToken)),
+        romulusDelegate
+      );
+    }
+    Voter v = voters[msg.sender];
+    stakingToken.safeTransferFrom(msg.sender, address(v), amount);
     emit Staked(msg.sender, amount);
   }
 
@@ -148,33 +137,15 @@ contract VotableStakingRewards is
     nonReentrant
     updateReward(msg.sender)
   {
+    require(address(voters[msg.sender]) != address(0), "Caller has no voter");
     require(amount > 0, "Cannot withdraw 0");
+    uint256 withdrawable = _balances[msg.sender].sub(userLocked[msg.sender]);
+    require(amount <= withdrawable, "Withdrawing more than available");
     _totalSupply = _totalSupply.sub(amount);
     _balances[msg.sender] = _balances[msg.sender].sub(amount);
-
-    Voter v = delegates[userDelegateIdx[msg.sender]];
-    v.removeVotes(amount);
-
-    stakingToken.safeTransfer(msg.sender, amount);
+    Voter v = voters[msg.sender];
+    v.removeVotes(msg.sender, amount);
     emit Withdrawn(msg.sender, amount);
-  }
-
-  function changeDelegateIdx(uint8 nextIdx) external nonReentrant {
-    require(nextIdx < 3, "newDelegateIdx out of bounds.");
-    uint8 previousIdx = userDelegateIdx[msg.sender];
-    Voter previous = delegates[previousIdx];
-    uint256 balance = _balances[msg.sender];
-    previous.removeVotes(balance);
-
-    Voter next = delegates[nextIdx];
-    require(
-      stakingToken.approve(address(next), balance),
-      "Approve to voter failed"
-    );
-    next.addVotes(balance);
-
-    userDelegateIdx[msg.sender] = nextIdx;
-    emit DelegateIdxChanged(previousIdx, nextIdx);
   }
 
   function getReward() public override nonReentrant updateReward(msg.sender) {
@@ -187,8 +158,27 @@ contract VotableStakingRewards is
   }
 
   function exit() external override {
-    withdraw(_balances[msg.sender]);
+    withdraw(_balances[msg.sender].sub(userLocked[msg.sender]));
     getReward();
+  }
+
+  function allocatePoolWeight(uint256 poolId, uint256 amount) external {
+    require(
+      amount.add(userLocked[msg.sender]) <= _balances[msg.sender],
+      "Allocating too much"
+    );
+
+    userLocked[msg.sender] = userLocked[msg.sender].add(amount);
+    userWeights[msg.sender][poolId] = userWeights[msg.sender][poolId].add(amount);
+    poolWeights[poolId] = poolWeights[poolId].add(amount);
+  }
+
+  function removePoolWeight(uint256 poolId, uint256 amount) external isUnlocked {
+    require(userWeights[msg.sender][poolId] >= amount, "Removing too much");
+
+    userLocked[msg.sender] = userLocked[msg.sender].sub(amount);
+    userWeights[msg.sender][poolId] = userWeights[msg.sender][poolId].sub(amount);
+    poolWeights[poolId] = poolWeights[poolId].sub(amount);
   }
 
   /* ========== RESTRICTED FUNCTIONS ========== */
@@ -222,6 +212,35 @@ contract VotableStakingRewards is
     emit RewardAdded(reward);
   }
 
+  function setRewardsDuration(uint256 _rewardsDuration) external onlyOwner {
+    require(
+      block.timestamp > periodFinish,
+      "Rewards period must be end before changing the rewardsDuration"
+    );
+    rewardsDuration = _rewardsDuration;
+    emit RewardsDurationUpdated(rewardsDuration);
+  }
+
+  function lock() external onlyOwner isUnlocked {
+    emit Locked(block.timestamp, block.timestamp + lockDuration);
+    lockTime = block.timestamp;
+  }
+
+  function syncWeights(uint256 start, uint256 end) external onlyOwner {
+    uint256 poolsCount = poolManager.poolsCount();
+    if (end > poolsCount) {
+      end = poolsCount;
+    }
+    for (uint256 i = start; i < end; i++) {
+      poolManager.setWeight(poolManager.poolsByIndex(i), poolWeights[i]);
+    }
+  }
+
+  function setLockDuration(uint256 _lockDuration) external onlyOwner isUnlocked {
+    emit LockDurationChanged(lockDuration, _lockDuration);
+    lockDuration =  _lockDuration;
+  }
+
   // Added to support recovering LP Rewards from other systems such as BAL to be distributed to holders
   function recoverERC20(address tokenAddress, uint256 tokenAmount)
     external
@@ -235,13 +254,8 @@ contract VotableStakingRewards is
     emit Recovered(tokenAddress, tokenAmount);
   }
 
-  function setRewardsDuration(uint256 _rewardsDuration) external onlyOwner {
-    require(
-      block.timestamp > periodFinish,
-      "Previous rewards period must be complete before changing the duration for the new period"
-    );
-    rewardsDuration = _rewardsDuration;
-    emit RewardsDurationUpdated(rewardsDuration);
+  function transferPoolManagerOwnership(address to) external onlyOwner {
+    poolManager.transferOwnership(to);
   }
 
   /* ========== MODIFIERS ========== */
@@ -256,6 +270,11 @@ contract VotableStakingRewards is
     _;
   }
 
+  modifier isUnlocked() {
+    require(block.timestamp >= lockTime.add(lockDuration), "Weights are locked");
+    _;
+  }
+
   /* ========== EVENTS ========== */
 
   event RewardAdded(uint256 reward);
@@ -264,5 +283,6 @@ contract VotableStakingRewards is
   event RewardPaid(address indexed user, uint256 reward);
   event RewardsDurationUpdated(uint256 newDuration);
   event Recovered(address token, uint256 amount);
-  event DelegateIdxChanged(uint8 previousDelegateIdx, uint8 nextDelegateIdx);
+  event Locked(uint256 lockTime, uint256 lockEndTime);
+  event LockDurationChanged(uint256 prevLockDuration, uint256 nextLockDuration);
 }

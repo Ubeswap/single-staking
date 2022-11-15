@@ -42,12 +42,16 @@ module.exports = {
   // Configure your compilers
   compilers: {
     solc: {
-      version: "0.8.9",
+      version: "0.8.16",
       settings: {
         optimizer: {
           enabled: true,
         },
       },
     },
+  },
+  plugins: ["truffle-plugin-verify"],
+  api_keys: {
+    celoscan: process.env.CELOSCAN_API_KEY,
   },
 };
