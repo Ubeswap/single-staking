@@ -50,4 +50,8 @@ module.exports = {
       },
     },
   },
+  plugins: ["truffle-plugin-verify"],
+  api_keys: {
+    celoscan: process.env.CELOSCAN_API_KEY,
+  },
 };

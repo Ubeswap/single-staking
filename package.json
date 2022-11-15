@@ -26,5 +26,8 @@
     "slither": "slither --exclude-dependencies --exclude-informational --exclude-low --exclude=reentrancy-eth,reentrancy-no-eth,divide-before-multiply .",
     "compile": "truffle compile",
     "test": "NODE_OPTIONS=--openssl-legacy-provider truffle test"
+  },
+  "devDependencies": {
+    "truffle-plugin-verify": "^0.5.33"
   }
 }

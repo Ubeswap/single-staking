@@ -8,7 +8,9 @@ module.exports = function (deployer, network) {
       "0x0Ce41DbCEA62580Ae2C894a7D93E97da0c3daC3a",
       "0x00be915b9dcf56a3cbe739d9b9c202ca692409ec",
       "0x00be915b9dcf56a3cbe739d9b9c202ca692409ec",
-      "0xa7581d8E26007f4D2374507736327f5b46Dd6bA8"
+      "0xa7581d8E26007f4D2374507736327f5b46Dd6bA8",
+      "0x9Ee3600543eCcc85020D6bc77EB553d1747a65D2",
+      60 * 60 * 24 * 5 // 5 days
     );
   }
 };
